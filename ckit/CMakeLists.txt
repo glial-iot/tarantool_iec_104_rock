@@ -4,7 +4,7 @@ endif(APPLE)
 
 # Add C library
 add_library(lib SHARED lib.c)
-target_link_libraries(lib ${MSGPUCK_LIBRARIES} lib60870)
+target_link_libraries(lib ${MSGPUCK_LIBRARIES} lib60870 json-c)
 set_target_properties(lib PROPERTIES PREFIX "" OUTPUT_NAME "lib")
 
 # Install module
