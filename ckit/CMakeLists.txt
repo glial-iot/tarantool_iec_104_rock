@@ -1,5 +1,7 @@
 if (APPLE)
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -undefined suppress -flat_namespace")
+    INCLUDE_DIRECTORIES(/usr/local/Cellar/json-c/0.13.1/include/json-c)
+    LINK_DIRECTORIES(/usr/local/Cellar/json-c/0.13.1/lib)
 endif(APPLE)
 
 # Add C library
