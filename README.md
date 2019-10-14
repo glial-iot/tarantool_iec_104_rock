@@ -7,4 +7,6 @@ Run `tarantoolctl rocks install iec104-scm-1.rockspec`.
 
 Gets values of all IOA present on IEC-104 slave (server) device and returns them in JSON format.
 
+**Dependencies:**  
 
+JSON-C Library `https://github.com/json-c/json-c`
