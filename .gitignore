@@ -24,3 +24,4 @@ VERSION
 CTestTestfile.cmake
 Testing
 CTestTestfile.cmake
+/.idea/
