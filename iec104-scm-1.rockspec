@@ -9,7 +9,7 @@ version = 'scm-1'
 -- url and branch of the package's repository at GitHub
 source  = {
     url    = 'git://github.com/glial-iot/tarantool_iec_104_rock.git';
-    branch = 'ckit';
+    branch = 'master';
 }
 
 -- general information about the package;
