@@ -2091,11 +2091,13 @@ iec_104_fetch(struct lua_State *L) {
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
 
-    while (!CONNECTION_CLOSING_FLAG) {
-        printf("waiting");
+    for (int i=1; i<=15; i++) {
+            Thread_sleep(1000);
+            if(CONNECTION_CLOSING_FLAG) {
+                    CS104_Connection_sendStopDT(con);
+                    break;
+            }
     }
-
-    CS104_Connection_sendStopDT(con);
 
     char *json_string = json_object_get_string(master_object);
     lua_pushstring(L, json_string);
