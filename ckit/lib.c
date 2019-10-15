@@ -2092,6 +2092,7 @@ iec_104_fetch(struct lua_State *L) {
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
 
     while (!CONNECTION_CLOSING_FLAG) {
+        printf("100ms");
         Thread_sleep(100);
     }
 
