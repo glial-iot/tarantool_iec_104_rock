@@ -2090,14 +2090,16 @@ iec_104_fetch(struct lua_State *L) {
 
     if (CS104_Connection_connect(con)) {
         Thread_sleep(20000);
-        //char *json_string = json_object_get_string(master_object);
-        //lua_pushstring(L, json_string);
+
         CS104_Connection_sendStopDT(con);
     } else {
         //printf("Connect failed!\n");
     }
 
-    return json_object_get_string(master_object);
+    char *json_string = json_object_get_string(master_object);
+    lua_pushstring(L, json_string);
+
+    return 1;
     //printf("exit\n");
 }
 
