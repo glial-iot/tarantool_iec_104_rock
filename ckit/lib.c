@@ -454,7 +454,7 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 //    }
 
     if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
-        //printf("%s\n", json_object_to_json_string(master_object));
+        printf("%s\n", json_object_to_json_string(master_object));
         exit(EXIT_SUCCESS);
     }
 
@@ -1757,7 +1757,6 @@ static void jsonify_F_DR_TA_1(struct sCS101_ASDU *asdu, struct json_object *mast
 /* Callback handler to log sent or received messages (optional) */
 static void
 rawMessageHandler(void *parameter, uint8_t *msg, int msgSize, bool sent) {
-/*
     (void) parameter;
     if (sent)
         printf("SEND: ");
@@ -1770,7 +1769,6 @@ rawMessageHandler(void *parameter, uint8_t *msg, int msgSize, bool sent) {
     }
 
     printf("\n");
-    */
 }
 
 /* Connection event handler */
@@ -1778,33 +1776,32 @@ static void
 connectionHandler(void *parameter, CS104_Connection connection, CS104_ConnectionEvent event) {
     switch (event) {
         case CS104_CONNECTION_OPENED:
-            //printf("Connection established\n");
+            printf("Connection established\n");
             CS104_Connection_sendStartDT(connection);
             break;
         case CS104_CONNECTION_CLOSED:
-            printf("");
+            printf("Connection closed\n");
             json_object *master_object = parameter;
-            //printf("%s\n", json_object_to_json_string(master_object));
+            printf("%s\n", json_object_to_json_string(master_object));
             exit(EXIT_SUCCESS);
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
-            //printf("Received STARTDT_CON\n");
+            printf("Received STARTDT_CON\n");
             CS104_Connection_sendInterrogationCommand(connection, CS101_COT_ACTIVATION, 1, IEC60870_QOI_STATION);
 //            CS104_Connection_sendCounterInterrogationCommand(connection, IEC60870_QCC_RQT_GENERAL, 1, IEC60870_QOI_STATION); // TODO: Verify
             break;
         case CS104_CONNECTION_STOPDT_CON_RECEIVED:
-            //printf("Received STOPDT_CON\n");
+            printf("Received STOPDT_CON\n");
             CS104_Connection_destroy(connection);
             break;
         default:
-            break;
-            //fprintf(stderr, "Received unknown event %d\n", event);
+            fprintf(stderr, "Received unknown event %d\n", event);
 //            exit(EXIT_FAILURE);
     }
 }
 
 void handle_M_ME_TE_1(struct sCS101_ASDU *asdu) {
-    //printf("  measured scaled values with CP56Time2a timestamp:\n");
+    printf("  measured scaled values with CP56Time2a timestamp:\n");
 
     int i;
 
@@ -1813,17 +1810,17 @@ void handle_M_ME_TE_1(struct sCS101_ASDU *asdu) {
         MeasuredValueScaledWithCP56Time2a io =
                 (MeasuredValueScaledWithCP56Time2a) CS101_ASDU_getElement(asdu, i);
 
-        /*printf("    IOA: %i value: %i\n",
+        printf("    IOA: %i value: %i\n",
                InformationObject_getObjectAddress((InformationObject) io),
                MeasuredValueScaled_getValue((MeasuredValueScaled) io)
-        );*/
+        );
 
         MeasuredValueScaledWithCP56Time2a_destroy(io);
     }
 }
 
 void handle_M_ME_TB_1(struct sCS101_ASDU *asdu) {
-    //printf("  scaled measured value (-32768 ... +32767) with CP24Time2a:\n");
+    printf("  scaled measured value (-32768 ... +32767) with CP24Time2a:\n");
 
     int i;
 
@@ -1833,16 +1830,16 @@ void handle_M_ME_TB_1(struct sCS101_ASDU *asdu) {
                 (MeasuredValueScaledWithCP24Time2a) CS101_ASDU_getElement(asdu, i);
 
         char *time;
-        /*printf("    IOA: %i value: %d Timestamp: ",
+        printf("    IOA: %i value: %d Timestamp: ",
                InformationObject_getObjectAddress((InformationObject) io),
                MeasuredValueScaled_getValue((MeasuredValueScaled) io)
-        );*/
+        );
         CP24Time2a timestamp = MeasuredValueScaledWithCP24Time2a_getTimestamp(io);
-        /*printf("%d:%d.%d\n",
+        printf("%d:%d.%d\n",
                CP24Time2a_getMinute(timestamp),
                CP24Time2a_getSecond(timestamp),
                CP24Time2a_getMillisecond(timestamp)
-        );*/
+        );
         MeasuredValueScaledWithCP24Time2a_destroy(io);
     }
 }
@@ -1858,12 +1855,12 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
     const int type = CS101_ASDU_getTypeID(asdu);
     const char *typeStr = TypeID_toString(type);
     const int cot = CS101_ASDU_getCOT(asdu);
-    /*printf("RECVD ASDU type: %s(%i) elements: %i cot %s(%i)\n",
+    printf("RECVD ASDU type: %s(%i) elements: %i cot %s(%i)\n",
            typeStr,
            type,
            CS101_ASDU_getNumberOfElements(asdu),
            CS101_CauseOfTransmission_toString(cot),
-           cot);*/
+           cot);
     switch (type) {
         case M_SP_NA_1: // "Single-point information"
             jsonify_M_SP_NA_1(asdu, master_object);
@@ -2064,7 +2061,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
 //            jsonify_F_DR_TA_1(asdu, master_object);
 //            break;
         default:
-            //fprintf(stderr, "Got not implemented yet ASDU type %s(%d)\n", typeStr, type);
+            fprintf(stderr, "Got not implemented yet ASDU type %s(%d)\n", typeStr, type);
             exit(1);
     }
     return true;
