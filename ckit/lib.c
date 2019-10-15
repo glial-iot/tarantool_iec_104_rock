@@ -1854,7 +1854,6 @@ void handle_M_ME_TB_1(struct sCS101_ASDU *asdu) {
  */
 static bool
 asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
-    json_object *master_object = parameter;
     const int type = CS101_ASDU_getTypeID(asdu);
     const char *typeStr = TypeID_toString(type);
     const int cot = CS101_ASDU_getCOT(asdu);
