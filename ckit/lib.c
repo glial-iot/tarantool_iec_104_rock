@@ -1792,9 +1792,10 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_STOPDT_CON_RECEIVED:
             printf("Received STOPDT_CON\n");
+            Thread_sleep(100);
             struct lua_State *L = parameter;
             char *json_string = json_object_to_json_string(master_object);
-            printf(json_string);
+            //printf(json_string);
             lua_pushstring(L, json_string);
             CS104_Connection_destroy(connection);
             break;
@@ -2092,7 +2093,7 @@ iec_104_fetch(struct lua_State *L) {
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
 
     if (CS104_Connection_connect(con)) {
-        Thread_sleep(20000);
+        Thread_sleep(10000);
         CS104_Connection_sendStopDT(con);
     } else {
         //printf("Connect failed!\n");
