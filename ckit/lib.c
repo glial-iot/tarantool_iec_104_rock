@@ -2094,13 +2094,13 @@ iec_104_fetch(struct lua_State *L) {
     } else {
         //printf("Connect failed!\n");
     }
-    printf("RESULT ----->");
-        printf(json_string);
+
+    printf("TEST ----->");
 
     char *json_string = json_object_get_string(master_object);
-
+        printf("TEST1 ----->");
     lua_pushstring(L, json_string);
-
+    printf("TEST2 ----->");
     return 1;
     //printf("exit\n");
 }
@@ -2114,11 +2114,14 @@ luaopen_ckit_lib(lua_State *L)
 {
 	/* result returned from require('ckit.lib') */
 	lua_newtable(L);
+	    printf("TEST4 ----->");
 	static const struct luaL_Reg meta [] = {
 		{"fetch", iec_104_fetch},
 		{NULL, NULL}
 	};
+	    printf("TEST5 ----->");
 	luaL_register(L, NULL, meta);
+	    printf("TEST6 ----->");
 	return 1;
 }
 /* vim: syntax=c ts=8 sts=8 sw=8 noet */
