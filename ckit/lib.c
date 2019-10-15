@@ -1786,7 +1786,6 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             struct lua_State *L = parameter;
             char *json_string = json_object_get_string(master_object);
             lua_pushstring(L, json_string);
-            printf("%s\n", json_string);
             //exit(EXIT_SUCCESS);
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
