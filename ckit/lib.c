@@ -1796,7 +1796,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             struct lua_State *L = parameter;
             char *json_string = json_object_to_json_string(master_object);
             //printf(json_string);
-            lua_pushstring(L, json_string);
+            lua_pushfstring(L, json_string);
             CS104_Connection_destroy(connection);
             break;
         default:
