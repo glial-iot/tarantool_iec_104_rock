@@ -454,7 +454,9 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 //    }
 
     if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
-        printf("%s\n", json_object_to_json_string(master_object));
+        json_string = json_object_to_json_string(master_object);
+        printf("%s\n", json_string);
+        lua_pushstring(L, json_string);
         exit(EXIT_SUCCESS);
     }
 
@@ -2095,14 +2097,7 @@ iec_104_fetch(struct lua_State *L) {
         //printf("Connect failed!\n");
     }
 
-    printf("TEST ----->");
-
-    char *json_string = json_object_get_string(master_object);
-        printf("TEST1 ----->");
-    lua_pushstring(L, json_string);
-    printf("TEST2 ----->");
     return 1;
-    //printf("exit\n");
 }
 
 
