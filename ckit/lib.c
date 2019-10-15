@@ -32,8 +32,6 @@ struct channel_desc_entry {
     char *channelDesc;
 };
 
-json_object *master_object;
-
 struct channel_desc_entry entries[] = {
         {100,  "Power Active channel 1"},
         {116,  "Power Active channel 2"},
@@ -456,7 +454,7 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 //    }
 
     if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
-        //printf("%s\n", json_object_to_json_string(master_object));
+        printf("%s\n", json_object_to_json_string(master_object));
         //exit(EXIT_SUCCESS);
     }
 
@@ -1782,7 +1780,9 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             CS104_Connection_sendStartDT(connection);
             break;
         case CS104_CONNECTION_CLOSED:
-            //printf("Connection closed\n");
+            printf("Connection closed\n");
+            json_object *master_object = parameter;
+            printf("%s\n", json_object_to_json_string(master_object));
             //exit(EXIT_SUCCESS);
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
@@ -1792,11 +1792,6 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_STOPDT_CON_RECEIVED:
             printf("Received STOPDT_CON\n");
-            Thread_sleep(100);
-            struct lua_State *L = parameter;
-            char *json_string = json_object_to_json_string(master_object);
-            printf(json_string);
-            //lua_pushfstring(L, json_string);
             CS104_Connection_destroy(connection);
             break;
         default:
@@ -1856,6 +1851,7 @@ void handle_M_ME_TB_1(struct sCS101_ASDU *asdu) {
  */
 static bool
 asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
+    json_object *master_object = parameter;
     const int type = CS101_ASDU_getTypeID(asdu);
     const char *typeStr = TypeID_toString(type);
     const int cot = CS101_ASDU_getCOT(asdu);
@@ -2085,15 +2081,17 @@ iec_104_fetch(struct lua_State *L) {
 
     //printf("Connecting to: %s:%i\n", ip, port);
     CS104_Connection con = CS104_Connection_create(ip, port);
-    master_object = create_master_object(ip, port);
-    CS104_Connection_setConnectionHandler(con, connectionHandler, L);
-    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, L);
+    json_object *master_object = create_master_object(ip, port);
+    CS104_Connection_setConnectionHandler(con, connectionHandler, master_object);
+    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, master_object);
 
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
 
     if (CS104_Connection_connect(con)) {
-        Thread_sleep(10000);
+        Thread_sleep(20000);
+        char *json_string = json_object_get_string(master_object);
+        lua_pushstring(L, json_string);
         CS104_Connection_sendStopDT(con);
     } else {
         //printf("Connect failed!\n");
