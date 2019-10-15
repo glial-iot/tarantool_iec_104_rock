@@ -2095,6 +2095,7 @@ iec_104_fetch(struct lua_State *L) {
             Thread_sleep(100);
         }
         CS104_Connection_sendStopDT(con);
+        CONNECTION_CLOSING_FLAG = false;
     }
     else {
 
