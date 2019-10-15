@@ -1782,10 +1782,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             CS104_Connection_sendStartDT(connection);
             break;
         case CS104_CONNECTION_CLOSED:
-            printf("Connection closed\n");
-            struct lua_State *L = parameter;
-            char *json_string = json_object_to_json_string(master_object);
-            lua_pushstring(L, json_string);
+            //printf("Connection closed\n");
             //exit(EXIT_SUCCESS);
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
@@ -1795,6 +1792,10 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_STOPDT_CON_RECEIVED:
             printf("Received STOPDT_CON\n");
+            struct lua_State *L = parameter;
+            char *json_string = json_object_to_json_string(master_object);
+            printf(json_string);
+            lua_pushstring(L, json_string);
             CS104_Connection_destroy(connection);
             break;
         default:
