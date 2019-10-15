@@ -2086,6 +2086,7 @@ iec_104_fetch(struct lua_State *L) {
     //printf("Connecting to: %s:%i\n", ip, port);
     CS104_Connection con = CS104_Connection_create(ip, port);
     master_object = create_master_object(ip, port);
+    fprintf(master_object);
     CS104_Connection_setConnectionHandler(con, connectionHandler, L);
     CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, master_object);
 
