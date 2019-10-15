@@ -420,7 +420,7 @@ static json_object *create_master_object(const char *address, const uint16_t por
     return master_object;
 }
 
-static void put_measurement(struct json_object *master_object, struct json_object *measurement, struct lua_State *L) {
+static void put_measurement(struct json_object *master_object, struct json_object *measurement) {
     struct json_object *ioa;
     json_object_object_get_ex(measurement, OBJECT_ADDRESS, &ioa);
     int ioa_int = json_object_get_int(ioa);
@@ -454,16 +454,14 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 //    }
 
     if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
-        json_string = json_object_to_json_string(master_object);
-        printf("%s\n", json_string);
-        lua_pushstring(L, json_string);
+        printf("%s\n", json_object_to_json_string(master_object));
         exit(EXIT_SUCCESS);
     }
 
 }
 
 // M_SP_NA_1: "Single-point information"
-static void jsonify_M_SP_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object, struct lua_State *L) {
+static void jsonify_M_SP_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object) {
     for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
         json_object *measurement = json_object_new_object();
         InformationObject io = CS101_ASDU_getElement(asdu, i);
@@ -481,7 +479,7 @@ static void jsonify_M_SP_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_QUALITY, json_object_new_string(quality));
         free(quality);
 
-        put_measurement(master_object, measurement, L);
+        put_measurement(master_object, measurement);
         SinglePointInformation_destroy((SinglePointInformation) io);
     }
 }
@@ -582,7 +580,7 @@ static void jsonify_M_ST_TA_1(struct sCS101_ASDU *asdu, struct json_object *mast
 */
 
 // M_BO_NA_1: "Bitstring of 32 bit"
-static void jsonify_M_BO_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object, struct lua_State *L) {
+static void jsonify_M_BO_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object) {
     for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
         json_object *measurement = json_object_new_object();
         InformationObject io = CS101_ASDU_getElement(asdu, i);
@@ -602,7 +600,7 @@ static void jsonify_M_BO_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_QUALITY, json_object_new_string(quality));
         free(quality);
 
-        put_measurement(master_object, measurement, L);
+        put_measurement(master_object, measurement);
 
         BitString32_destroy((BitString32) io);
     }
@@ -666,7 +664,7 @@ static void jsonify_M_ME_TA_1(struct sCS101_ASDU *asdu, struct json_object *mast
 */
 
 // M_ME_NB_1: "Measured value, scaled value"
-static void jsonify_M_ME_NB_1(struct sCS101_ASDU *asdu, struct json_object *master_object, struct lua_State *L) {
+static void jsonify_M_ME_NB_1(struct sCS101_ASDU *asdu, struct json_object *master_object) {
     for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
         json_object *measurement = json_object_new_object();
         InformationObject io = CS101_ASDU_getElement(asdu, i);
@@ -684,7 +682,7 @@ static void jsonify_M_ME_NB_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_QUALITY, json_object_new_string(quality));
         free(quality);
 
-        put_measurement(master_object, measurement, L);
+        put_measurement(master_object, measurement);
         MeasuredValueScaled_destroy((MeasuredValueScaled) io);
     }
 }
@@ -709,7 +707,7 @@ static void jsonify_M_ME_TB_1(struct sCS101_ASDU *asdu, struct json_object *mast
 */
 
 // M_ME_NC_1: "Measured value, short floating point number"
-static void jsonify_M_ME_NC_1(struct sCS101_ASDU *asdu, struct json_object *master_object, struct lua_State *L) {
+static void jsonify_M_ME_NC_1(struct sCS101_ASDU *asdu, struct json_object *master_object) {
     for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
         json_object *measurement = json_object_new_object();
         InformationObject io = CS101_ASDU_getElement(asdu, i);
@@ -726,7 +724,7 @@ static void jsonify_M_ME_NC_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_QUALITY, json_object_new_string(quality));
         free(quality);
 
-        put_measurement(master_object, measurement, L);
+        put_measurement(master_object, measurement);
         MeasuredValueShort_destroy((MeasuredValueShort) io);
     }
 }
@@ -884,7 +882,7 @@ static void jsonify_M_ME_ND_1(struct sCS101_ASDU *asdu, struct json_object *mast
 */
 
 // M_SP_TB_1: "Single-point information with time tag CP56Time2a"
-static void jsonify_M_SP_TB_1(struct sCS101_ASDU *asdu, struct json_object *master_object, struct lua_State *L) {
+static void jsonify_M_SP_TB_1(struct sCS101_ASDU *asdu, struct json_object *master_object) {
     for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
         json_object *measurement = json_object_new_object();
         InformationObject io = CS101_ASDU_getElement(asdu, i);
@@ -904,7 +902,7 @@ static void jsonify_M_SP_TB_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_QUALITY, json_object_new_string(quality));
         free(quality);
 
-        put_measurement(master_object, measurement, L);
+        put_measurement(master_object, measurement);
         SinglePointWithCP56Time2a_destroy((SinglePointWithCP56Time2a) io);
     }
 }
@@ -1005,7 +1003,7 @@ static void jsonify_M_ME_TE_1(struct sCS101_ASDU *asdu, struct json_object *mast
 */
 
 // M_ME_TF_1: "Measured value, short floating point number with time tag CP56Time2a"
-static void jsonify_M_ME_TF_1(struct sCS101_ASDU *asdu, struct json_object *master_object, struct lua_State *L) {
+static void jsonify_M_ME_TF_1(struct sCS101_ASDU *asdu, struct json_object *master_object) {
     for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
         json_object *measurement = json_object_new_object();
         InformationObject io = CS101_ASDU_getElement(asdu, i);
@@ -1025,7 +1023,7 @@ static void jsonify_M_ME_TF_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_QUALITY, json_object_new_string(quality));
         free(quality);
 
-        put_measurement(master_object, measurement, L);
+        put_measurement(master_object, measurement);
         MeasuredValueShortWithCP56Time2a_destroy((MeasuredValueShortWithCP56Time2a) io);
     }
 }
@@ -1392,7 +1390,7 @@ static void jsonify_M_EI_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
 */
 
 // C_IC_NA_1: "Interrogation command"
-static void jsonify_C_IC_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object, struct lua_State *L) {
+static void jsonify_C_IC_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object) {
     for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
         json_object *measurement = json_object_new_object();
         InformationObject io = CS101_ASDU_getElement(asdu, i);
@@ -1406,13 +1404,13 @@ static void jsonify_C_IC_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_COT,
                                json_object_new_string(CS101_CauseOfTransmission_toString(CS101_ASDU_getCOT(asdu))));
 
-        put_measurement(master_object, measurement, L);
+        put_measurement(master_object, measurement);
         InterrogationCommand_destroy((InterrogationCommand) io);
     }
 }
 
 // C_CI_NA_1: "Counter interrogation command"
-static void jsonify_C_CI_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object, struct lua_State *L) {
+static void jsonify_C_CI_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object) {
     for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
         json_object *measurement = json_object_new_object();
         InformationObject io = CS101_ASDU_getElement(asdu, i);
@@ -1426,7 +1424,7 @@ static void jsonify_C_CI_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_COT,
                                json_object_new_string(CS101_CauseOfTransmission_toString(CS101_ASDU_getCOT(asdu))));
 
-        put_measurement(master_object, measurement, L);
+        put_measurement(master_object, measurement);
         CounterInterrogationCommand_destroy((CounterInterrogationCommand) io);
     }
 }
@@ -1451,7 +1449,7 @@ static void jsonify_C_RD_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
 */
 
 // C_CS_NA_1: "Clock synchronisation command"
-static void jsonify_C_CS_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object, struct lua_State *L) {
+static void jsonify_C_CS_NA_1(struct sCS101_ASDU *asdu, struct json_object *master_object) {
     for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
         json_object *measurement = json_object_new_object();
         InformationObject io = CS101_ASDU_getElement(asdu, i);
@@ -1465,7 +1463,7 @@ static void jsonify_C_CS_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_COT,
                                json_object_new_string(CS101_CauseOfTransmission_toString(CS101_ASDU_getCOT(asdu))));
 
-        put_measurement(master_object, measurement, L);
+        put_measurement(master_object, measurement);
         ClockSynchronizationCommand_destroy((ClockSynchronizationCommand) io);
     }
 }
@@ -1852,7 +1850,7 @@ void handle_M_ME_TB_1(struct sCS101_ASDU *asdu) {
  * For CS104 the address parameter has to be ignored
  */
 static bool
-asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu, struct lua_State *L) {
+asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
     json_object *master_object = parameter;
     const int type = CS101_ASDU_getTypeID(asdu);
     const char *typeStr = TypeID_toString(type);
@@ -1865,7 +1863,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu, struct lua_St
            cot);
     switch (type) {
         case M_SP_NA_1: // "Single-point information"
-            jsonify_M_SP_NA_1(asdu, master_object, L);
+            jsonify_M_SP_NA_1(asdu, master_object);
             break;
 //        case M_SP_TA_1: // "Single-point information with time tag"
 //            jsonify_M_SP_TA_1(asdu, master_object);
@@ -1883,7 +1881,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu, struct lua_St
 //            jsonify_M_ST_TA_1(asdu, master_object);
 //            break;
         case M_BO_NA_1: // "Bitstring of 32 bit"
-            jsonify_M_BO_NA_1(asdu, master_object, L);
+            jsonify_M_BO_NA_1(asdu, master_object);
             break;
 //        case M_BO_TA_1: // "Bitstring of 32 bit with time tag"
 //            jsonify_M_BO_TA_1(asdu, master_object);
@@ -1895,13 +1893,13 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu, struct lua_St
 //            jsonify_M_ME_TA_1(asdu, master_object);
 //            break;
         case M_ME_NB_1: // "Measured value, scaled value"
-            jsonify_M_ME_NB_1(asdu, master_object, L);
+            jsonify_M_ME_NB_1(asdu, master_object);
             break;
 //        case M_ME_TB_1: // "Measured value, scaled value wit time tag"
 //            jsonify_M_ME_TB_1(asdu, master_object);
 //            break;
         case M_ME_NC_1: // "Measured value, short floating point number"
-            jsonify_M_ME_NC_1(asdu, master_object, L);
+            jsonify_M_ME_NC_1(asdu, master_object);
             break;
 //        case M_ME_TC_1: // "Measured value, short floating point number with time tag"
 //            jsonify_M_ME_TC_1(asdu, master_object);
@@ -1928,7 +1926,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu, struct lua_St
 //            jsonify_M_ME_ND_1(asdu, master_object);
 //            break;
         case M_SP_TB_1: // "Single-point information with time tag CP56Time2a"
-            jsonify_M_SP_TB_1(asdu, master_object, L);
+            jsonify_M_SP_TB_1(asdu, master_object);
             break;
 //        case M_DP_TB_1: // "Double-point information with time tag CP56Time2a"
 //            jsonify_M_DP_TB_1(asdu, master_object);
@@ -1946,7 +1944,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu, struct lua_St
 //            jsonify_M_ME_TE_1(asdu, master_object);
 //            break;
         case M_ME_TF_1: // "Measured value, short floating point number with time tag CP56Time2a"
-            jsonify_M_ME_TF_1(asdu, master_object, L);
+            jsonify_M_ME_TF_1(asdu, master_object);
             break;
 //        case M_IT_TB_1: // "Integrated totals with time tag CP56Time2a"
 //            jsonify_M_IT_TB_1(asdu, master_object);
@@ -2006,16 +2004,16 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu, struct lua_St
 //            jsonify_M_EI_NA_1(asdu, master_object);
 //            break;
         case C_IC_NA_1: // "Interrogation command"
-            jsonify_C_IC_NA_1(asdu, master_object, L);
+            jsonify_C_IC_NA_1(asdu, master_object);
             break;
         case C_CI_NA_1: // "Counter interrogation command"
-            jsonify_C_CI_NA_1(asdu, master_object, L);
+            jsonify_C_CI_NA_1(asdu, master_object);
             break;
 //        case C_RD_NA_1: // "Read command"
 //            jsonify_C_RD_NA_1(asdu, master_object);
 //            break;
         case C_CS_NA_1: // "Clock synchronisation command"
-            jsonify_C_CS_NA_1(asdu, master_object, L);
+            jsonify_C_CS_NA_1(asdu, master_object);
             break;
 //        case C_TS_NA_1: // "Test command"
 //            jsonify_C_TS_NA_1(asdu, master_object);
@@ -2085,7 +2083,7 @@ iec_104_fetch(struct lua_State *L) {
     CS104_Connection con = CS104_Connection_create(ip, port);
     json_object *master_object = create_master_object(ip, port);
     CS104_Connection_setConnectionHandler(con, connectionHandler, master_object);
-    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, master_object, L);
+    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, master_object);
 
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
@@ -2097,7 +2095,14 @@ iec_104_fetch(struct lua_State *L) {
         //printf("Connect failed!\n");
     }
 
+    printf("TEST ----->");
+
+    char *json_string = json_object_get_string(master_object);
+        printf("TEST1 ----->");
+    lua_pushstring(L, json_string);
+    printf("TEST2 ----->");
     return 1;
+    //printf("exit\n");
 }
 
 
