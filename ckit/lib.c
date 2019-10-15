@@ -456,7 +456,7 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 //    }
 
     if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
-        printf("%s\n", json_object_to_json_string(master_object));
+        //printf("%s\n", json_object_to_json_string(master_object));
         //exit(EXIT_SUCCESS);
     }
 
@@ -1784,7 +1784,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
         case CS104_CONNECTION_CLOSED:
             printf("Connection closed\n");
             struct lua_State *L = parameter;
-            char *json_string = json_object_get_string(master_object);
+            char *json_string = json_object_to_json_string(master_object);
             lua_pushstring(L, json_string);
             //exit(EXIT_SUCCESS);
             break;
