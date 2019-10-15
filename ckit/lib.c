@@ -32,6 +32,8 @@ struct channel_desc_entry {
     char *channelDesc;
 };
 
+json_object *master_object;
+
 struct channel_desc_entry entries[] = {
         {100,  "Power Active channel 1"},
         {116,  "Power Active channel 2"},
@@ -1781,8 +1783,10 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_CLOSED:
             printf("Connection closed\n");
-            json_object *master_object = parameter;
-            printf("%s\n", json_object_to_json_string(master_object));
+            struct lua_State *L = parameter;
+            char *json_string = json_object_get_string(master_object);
+            lua_pushstring(L, json_string);
+            printf("%s\n", json_string);
             //exit(EXIT_SUCCESS);
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
@@ -2081,8 +2085,8 @@ iec_104_fetch(struct lua_State *L) {
 
     //printf("Connecting to: %s:%i\n", ip, port);
     CS104_Connection con = CS104_Connection_create(ip, port);
-    json_object *master_object = create_master_object(ip, port);
-    CS104_Connection_setConnectionHandler(con, connectionHandler, master_object);
+    master_object = create_master_object(ip, port);
+    CS104_Connection_setConnectionHandler(con, connectionHandler, L);
     CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, master_object);
 
     /* uncomment to log messages */
@@ -2090,8 +2094,6 @@ iec_104_fetch(struct lua_State *L) {
 
     if (CS104_Connection_connect(con)) {
         Thread_sleep(20000);
-        char *json_string = json_object_get_string(master_object);
-        lua_pushstring(L, json_string);
         CS104_Connection_sendStopDT(con);
     } else {
         //printf("Connect failed!\n");
