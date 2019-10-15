@@ -32,6 +32,8 @@ struct channel_desc_entry {
     char *channelDesc;
 };
 
+bool CONNECTION_CLOSING_FLAG = false;
+
 struct channel_desc_entry entries[] = {
         {100,  "Power Active channel 1"},
         {116,  "Power Active channel 2"},
@@ -454,7 +456,8 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 //    }
 
     if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
-        printf("%s\n", json_object_to_json_string(master_object));
+        CONNECTION_CLOSING_FLAG = true;
+        //printf("%s\n", json_object_to_json_string(master_object));
         //exit(EXIT_SUCCESS);
     }
 
@@ -2088,13 +2091,11 @@ iec_104_fetch(struct lua_State *L) {
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
 
-    if (CS104_Connection_connect(con)) {
-        Thread_sleep(20000);
-
-        CS104_Connection_sendStopDT(con);
-    } else {
-        //printf("Connect failed!\n");
+    while (!CONNECTION_CLOSING_FLAG) {
+        Thread_sleep(100);
     }
+
+    CS104_Connection_sendStopDT(con);
 
     char *json_string = json_object_get_string(master_object);
     lua_pushstring(L, json_string);
