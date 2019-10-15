@@ -2094,9 +2094,11 @@ iec_104_fetch(struct lua_State *L) {
     } else {
         //printf("Connect failed!\n");
     }
-    char *json_string = json_object_get_string(master_object);
     printf("RESULT ----->");
-    printf(json_string);
+        printf(json_string);
+
+    char *json_string = json_object_get_string(master_object);
+
     lua_pushstring(L, json_string);
 
     return 1;
