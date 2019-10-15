@@ -1782,7 +1782,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             CS104_Connection_sendStartDT(connection);
             break;
         case CS104_CONNECTION_CLOSED:
-            //printf("Connection closed\n");
+            printf("");
             json_object *master_object = parameter;
             //printf("%s\n", json_object_to_json_string(master_object));
             exit(EXIT_SUCCESS);
