@@ -455,7 +455,7 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 
     if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
         printf("%s\n", json_object_to_json_string(master_object));
-        exit(EXIT_SUCCESS);
+        //exit(EXIT_SUCCESS);
     }
 
 }
@@ -1783,7 +1783,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             printf("Connection closed\n");
             json_object *master_object = parameter;
             printf("%s\n", json_object_to_json_string(master_object));
-            exit(EXIT_SUCCESS);
+            //exit(EXIT_SUCCESS);
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
             printf("Received STARTDT_CON\n");
@@ -2062,7 +2062,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
 //            break;
         default:
             fprintf(stderr, "Got not implemented yet ASDU type %s(%d)\n", typeStr, type);
-            exit(1);
+            //exit(1);
     }
     return true;
 }
@@ -2089,23 +2089,17 @@ iec_104_fetch(struct lua_State *L) {
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
 
     if (CS104_Connection_connect(con)) {
-        Thread_sleep(1800000);
+        Thread_sleep(20000);
+        char *json_string = json_object_get_string(master_object);
+        lua_pushstring(L, json_string);
         CS104_Connection_sendStopDT(con);
     } else {
         //printf("Connect failed!\n");
     }
 
-    printf("TEST ----->");
-
-    char *json_string = json_object_get_string(master_object);
-        printf("TEST1 ----->");
-    lua_pushstring(L, json_string);
-    printf("TEST2 ----->");
     return 1;
     //printf("exit\n");
 }
-
-
 
 
 /* exported function */
@@ -2114,14 +2108,11 @@ luaopen_ckit_lib(lua_State *L)
 {
 	/* result returned from require('ckit.lib') */
 	lua_newtable(L);
-	    printf("TEST4 ----->");
 	static const struct luaL_Reg meta [] = {
 		{"fetch", iec_104_fetch},
 		{NULL, NULL}
 	};
-	    printf("TEST5 ----->");
 	luaL_register(L, NULL, meta);
-	    printf("TEST6 ----->");
 	return 1;
 }
 /* vim: syntax=c ts=8 sts=8 sw=8 noet */
