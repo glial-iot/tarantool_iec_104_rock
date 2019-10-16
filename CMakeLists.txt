@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
-project(ckit C)
+project(ckit C CXX)
 # project(ckit C CXX)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fpic")

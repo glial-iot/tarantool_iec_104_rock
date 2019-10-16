@@ -2091,8 +2091,15 @@ iec_104_fetch(struct lua_State *L) {
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
     if(CS104_Connection_connect(con)) {
+        long int time_start;
+        long int time_current;
+        time_start = time(NULL);
         while (!CONNECTION_CLOSING_FLAG) {
             Thread_sleep(100);
+            time_current = time(NULL);
+            if (time_current - time_start > 15) {
+                break;
+            }
         }
         CS104_Connection_sendStopDT(con);
         CONNECTION_CLOSING_FLAG = false;
