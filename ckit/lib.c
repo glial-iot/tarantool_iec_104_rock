@@ -2113,8 +2113,6 @@ iec_104_fetch(struct lua_State *L) {
 
     free(json_string);
     free(master_object);
-    free(ip);
-    free(port);
 
     return 1;
     //printf("exit\n");
