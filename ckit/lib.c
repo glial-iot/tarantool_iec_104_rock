@@ -2108,9 +2108,13 @@ iec_104_fetch(struct lua_State *L) {
 
     }
 
-
     char *json_string = json_object_get_string(master_object);
     lua_pushstring(L, json_string);
+
+    free(json_string);
+    free(master_object);
+    free(ip);
+    free(port);
 
     return 1;
     //printf("exit\n");
