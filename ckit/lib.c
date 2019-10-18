@@ -2110,7 +2110,7 @@ iec_104_fetch(struct lua_State *L) {
     lua_pushstring(L, json_string);
 
     free((char *)json_string);
-    json_object_put(master_object);
+    //json_object_put(master_object);
 
     return 1;
     //printf("exit\n");
