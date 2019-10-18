@@ -2106,7 +2106,7 @@ iec_104_fetch(struct lua_State *L) {
 
     }
 
-    const char *json_string = json_object_get_string(master_object);
+    const char *json_string = json_object_to_json_string(master_object);
     lua_pushstring(L, json_string);
 
     free((char *)json_string);
