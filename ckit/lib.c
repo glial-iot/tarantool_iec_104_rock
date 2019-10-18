@@ -458,7 +458,6 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 
     if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
         CONNECTION_CLOSING_FLAG = true;
-        //printf("%s\n", json_object_to_json_string(master_object));
         //exit(EXIT_SUCCESS);
     }
 
@@ -1785,8 +1784,6 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_CLOSED:
             printf("Connection closed\n");
-            json_object *master_object = parameter;
-            printf("%s\n", json_object_to_json_string(master_object));
             //exit(EXIT_SUCCESS);
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
