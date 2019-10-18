@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <json-c/json.h>
+#include <time.h>
 #include <sys/time.h>
 #include <string.h>
 
@@ -332,7 +333,7 @@ static char *QualityToString(unsigned int quality) {
              (quality & IEC60870_QUALITY_NON_TOPICAL ? "NON_TOPICAL|" : ""),
              (quality & IEC60870_QUALITY_INVALID ? "INVALID|" : "")
     );
-    buf[strlen(buf)] = '\0';
+    buf[79] = '\0';
     return strdup(buf);
 }
 
@@ -2108,11 +2109,11 @@ iec_104_fetch(struct lua_State *L) {
 
     }
 
-    char *json_string = json_object_get_string(master_object);
+    const char *json_string = json_object_get_string(master_object);
     lua_pushstring(L, json_string);
 
-    free(json_string);
-    free(master_object);
+    free((char *)json_string);
+    json_object_put(master_object);
 
     return 1;
     //printf("exit\n");
