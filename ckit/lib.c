@@ -35,6 +35,7 @@ struct channel_desc_entry {
 
 struct connection_parameter {
     bool CONNECTION_CLOSING_FLAG;
+    bool CONNECTION_CLOSED_FLAG;
     struct json_object *master_object;
 };
 
@@ -1771,6 +1772,7 @@ rawMessageHandler(void *parameter, uint8_t *msg, int msgSize, bool sent) {
 /* Connection event handler */
 static void
 connectionHandler(void *parameter, CS104_Connection connection, CS104_ConnectionEvent event) {
+    struct connection_parameter* parameter_obj = (struct connection_parameter*) parameter;
     switch (event) {
         case CS104_CONNECTION_OPENED:
             printf("Connection established\n");
@@ -1778,7 +1780,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_CLOSED:
             printf("Connection closed\n");
-            //exit(EXIT_SUCCESS);
+            parameter_obj->CONNECTION_CLOSED_FLAG = true;
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
             printf("Received STARTDT_CON\n");
@@ -1786,12 +1788,13 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
 //            CS104_Connection_sendCounterInterrogationCommand(connection, IEC60870_QCC_RQT_GENERAL, 1, IEC60870_QOI_STATION); // TODO: Verify
             break;
         case CS104_CONNECTION_STOPDT_CON_RECEIVED:
-            printf("Received STOPDT_CON\n");
-            CS104_Connection_destroy(connection);
+            printf("Received STOPDT_CON - closing connection\n");
+            parameter_obj->CONNECTION_CLOSING_FLAG = true;
+            CS104_Connection_close(connection);
             break;
         default:
             fprintf(stderr, "Received unknown event %d\n", event);
-//            exit(EXIT_FAILURE);
+            exit(EXIT_FAILURE);
     }
 }
 
@@ -2112,11 +2115,23 @@ int main(int argc, char **argv) {
             Thread_sleep(100);
             time_current = time(NULL);
             if (time_current - time_start > 15) {
+                printf("Timed out receiving data\n");
                 break;
             }
         }
+        printf("Sending StopDT\n");
         CS104_Connection_sendStopDT(con);
-        parameter.CONNECTION_CLOSING_FLAG = false;
+        while (!parameter.CONNECTION_CLOSED_FLAG) {
+            Thread_sleep(100);
+            time_current = time(NULL);
+            if (time_current - time_start > 15) {
+                printf("Timed out closing the connection\n");
+                break;
+            }
+        }
+        printf("Destroying the connection\n");
+        CS104_Connection_destroy(con);
+        printf("Destroyed the connection\n");
     }
     else {
 
