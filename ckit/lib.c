@@ -2070,15 +2070,29 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
 
 static int
 iec_104_fetch(struct lua_State *L) {
+#if defined(STANDALONE)
+	return 0;
+}
 
+int main(int argc, char **argv) {
+#endif
     const char *ip;
     uint16_t port;
 
+#if defined(STANDALONE)
+    if (argc < 3) {
+		fprintf(stderr, "Usage: %s <host> <port>\n", argv[0]);
+		exit(EXIT_FAILURE);
+	}
+	ip = argv[1];
+	port = (uint16_t)strtol(argv[2], NULL, 10);
+#else
     if (lua_gettop(L) < 2)
     		luaL_error(L, "Usage: fetch(host: string, port: number)");
 
     ip = lua_tostring(L, 1);
     port = lua_tointeger(L, 2);
+#endif
 
     //printf("Connecting to: %s:%i\n", ip, port);
     CS104_Connection con = CS104_Connection_create(ip, port);
@@ -2107,7 +2121,11 @@ iec_104_fetch(struct lua_State *L) {
     }
 
     const char *json_string = json_object_to_json_string(master_object);
+#if defined(STANDALONE)
+    printf("%s\n", json_string);
+#else
     lua_pushstring(L, json_string);
+#endif
 
     free((char *)json_string);
     json_object_put(master_object);
