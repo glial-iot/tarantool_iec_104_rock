@@ -33,7 +33,10 @@ struct channel_desc_entry {
     char *channelDesc;
 };
 
-bool CONNECTION_CLOSING_FLAG = false;
+struct connection_parameter {
+    bool CONNECTION_CLOSING_FLAG;
+    struct json_object *master_object;
+};
 
 struct channel_desc_entry entries[] = {
         {100,  "Power Active channel 1"},
@@ -456,12 +459,6 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 //    } else {
 //        printf("%s: Ignoring wrong COT %s\n", __func__, cot);
 //    }
-
-    if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
-        CONNECTION_CLOSING_FLAG = true;
-        //exit(EXIT_SUCCESS);
-    }
-
 }
 
 // M_SP_NA_1: "Single-point information"
@@ -1853,7 +1850,6 @@ void handle_M_ME_TB_1(struct sCS101_ASDU *asdu) {
  */
 static bool
 asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
-    json_object *master_object = parameter;
     const int type = CS101_ASDU_getTypeID(asdu);
     const char *typeStr = TypeID_toString(type);
     const int cot = CS101_ASDU_getCOT(asdu);
@@ -1863,6 +1859,14 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
            CS101_ASDU_getNumberOfElements(asdu),
            CS101_CauseOfTransmission_toString(cot),
            cot);
+
+    struct connection_parameter *parameter_obj = parameter;
+    if (cot == CS101_COT_ACTIVATION_TERMINATION) {
+        parameter_obj->CONNECTION_CLOSING_FLAG = true;
+        //exit(EXIT_SUCCESS);
+    }
+
+    struct json_object *master_object = parameter_obj->master_object;
     switch (type) {
         case M_SP_NA_1: // "Single-point information"
             jsonify_M_SP_NA_1(asdu, master_object);
@@ -2094,12 +2098,13 @@ int main(int argc, char **argv) {
     ip = lua_tostring(L, 1);
     port = lua_tointeger(L, 2);
 #endif
+    struct connection_parameter parameter = {0};
 
     //printf("Connecting to: %s:%i\n", ip, port);
     CS104_Connection con = CS104_Connection_create(ip, port);
-    json_object *master_object = create_master_object(ip, port);
-    CS104_Connection_setConnectionHandler(con, connectionHandler, master_object);
-    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, master_object);
+    parameter.master_object = create_master_object(ip, port);
+    CS104_Connection_setConnectionHandler(con, connectionHandler, &parameter);
+    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, &parameter);
 
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
@@ -2107,7 +2112,7 @@ int main(int argc, char **argv) {
         long int time_start;
         long int time_current;
         time_start = time(NULL);
-        while (!CONNECTION_CLOSING_FLAG) {
+        while (!parameter.CONNECTION_CLOSING_FLAG) {
             Thread_sleep(100);
             time_current = time(NULL);
             if (time_current - time_start > 15) {
@@ -2115,21 +2120,20 @@ int main(int argc, char **argv) {
             }
         }
         CS104_Connection_sendStopDT(con);
-        CONNECTION_CLOSING_FLAG = false;
+        parameter.CONNECTION_CLOSING_FLAG = false;
     }
     else {
 
     }
 
-    const char *json_string = json_object_to_json_string(master_object);
+    const char *json_string = json_object_get_string(parameter.master_object);
 #if defined(STANDALONE)
     printf("%s\n", json_string);
 #else
     lua_pushstring(L, json_string);
 #endif
-
-    free((char *)json_string);
-    json_object_put(master_object);
+    json_object_put(parameter.master_object);
+    parameter.master_object = NULL;
 
     return 1;
     //printf("exit\n");
