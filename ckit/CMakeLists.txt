@@ -12,3 +12,7 @@ set_target_properties(lib PROPERTIES PREFIX "" OUTPUT_NAME "lib")
 # Install module
 install(FILES init.lua DESTINATION ${TARANTOOL_INSTALL_LUADIR}/${PROJECT_NAME}/)
 install(TARGETS lib LIBRARY DESTINATION ${TARANTOOL_INSTALL_LIBDIR}/${PROJECT_NAME}/)
+
+add_executable(libtest lib.c)
+set_target_properties(libtest PROPERTIES COMPILE_FLAGS "${CMAKE_CXX_FLAGS} -DSTANDALONE")
+target_link_libraries(libtest ${MSGPUCK_LIBRARIES} lib60870 json-c lua5.1)

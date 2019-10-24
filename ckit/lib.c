@@ -34,7 +34,11 @@ struct channel_desc_entry {
     char *channelDesc;
 };
 
-bool CONNECTION_CLOSING_FLAG = false;
+struct connection_parameter {
+    bool CONNECTION_CLOSING_FLAG;
+    bool CONNECTION_CLOSED_FLAG;
+    struct json_object *master_object;
+};
 
 struct channel_desc_entry entries[] = {
         {100,  "Power Active channel 1"},
@@ -320,7 +324,7 @@ char *addresss_to_string(int channel_id) {
     return "unknown channel";
 }
 
-static char *QualityToString(unsigned int quality) {
+static char *QualityToString(QualityDescriptor quality) {
     char buf[80];
     if (quality == IEC60870_QUALITY_GOOD) {
         return strdup("GOOD");
@@ -335,6 +339,7 @@ static char *QualityToString(unsigned int quality) {
              (quality & IEC60870_QUALITY_INVALID ? "INVALID|" : "")
     );
     buf[79] = '\0';
+    buf[strlen(buf)] = '\0';
     return strdup(buf);
 }
 
@@ -456,12 +461,6 @@ static void put_measurement(struct json_object *master_object, struct json_objec
 //    } else {
 //        printf("%s: Ignoring wrong COT %s\n", __func__, cot);
 //    }
-
-    if (strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_ACTIVATION_TERMINATION)) == 0) {
-        CONNECTION_CLOSING_FLAG = true;
-        //exit(EXIT_SUCCESS);
-    }
-
 }
 
 // M_SP_NA_1: "Single-point information"
@@ -478,10 +477,6 @@ static void jsonify_M_SP_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
                                json_object_new_boolean(SinglePointInformation_getValue((SinglePointInformation) io)));
         json_object_object_add(measurement, OBJECT_COT,
                                json_object_new_string(CS101_CauseOfTransmission_toString(CS101_ASDU_getCOT(asdu))));
-
-        char *quality = QualityToString(MeasuredValueShort_getQuality((MeasuredValueShort) io));
-        json_object_object_add(measurement, OBJECT_QUALITY, json_object_new_string(quality));
-        free(quality);
 
         put_measurement(master_object, measurement);
         SinglePointInformation_destroy((SinglePointInformation) io);
@@ -690,7 +685,7 @@ static void jsonify_M_ME_NB_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_COT,
                                json_object_new_string(CS101_CauseOfTransmission_toString(CS101_ASDU_getCOT(asdu))));
 
-        char *quality = QualityToString(MeasuredValueShort_getQuality((MeasuredValueShort) io));
+        char *quality = QualityToString(MeasuredValueScaled_getQuality((MeasuredValueScaled) io));
         json_object_object_add(measurement, OBJECT_QUALITY, json_object_new_string(quality));
         free(quality);
 
@@ -1786,6 +1781,7 @@ rawMessageHandler(void *parameter, uint8_t *msg, int msgSize, bool sent) {
 /* Connection event handler */
 static void
 connectionHandler(void *parameter, CS104_Connection connection, CS104_ConnectionEvent event) {
+    struct connection_parameter* parameter_obj = (struct connection_parameter*) parameter;
     switch (event) {
         case CS104_CONNECTION_OPENED:
             printf("Connection established\n");
@@ -1793,7 +1789,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_CLOSED:
             printf("Connection closed\n");
-            //exit(EXIT_SUCCESS);
+            parameter_obj->CONNECTION_CLOSED_FLAG = true;
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
             printf("Received STARTDT_CON\n");
@@ -1801,12 +1797,13 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
 //            CS104_Connection_sendCounterInterrogationCommand(connection, IEC60870_QCC_RQT_GENERAL, 1, IEC60870_QOI_STATION); // TODO: Verify
             break;
         case CS104_CONNECTION_STOPDT_CON_RECEIVED:
-            printf("Received STOPDT_CON\n");
-            CS104_Connection_destroy(connection);
+            printf("Received STOPDT_CON - closing connection\n");
+            parameter_obj->CONNECTION_CLOSING_FLAG = true;
+            CS104_Connection_close(connection);
             break;
         default:
             fprintf(stderr, "Received unknown event %d\n", event);
-//            exit(EXIT_FAILURE);
+            exit(EXIT_FAILURE);
     }
 }
 
@@ -1861,7 +1858,6 @@ void handle_M_ME_TB_1(struct sCS101_ASDU *asdu) {
  */
 static bool
 asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
-    json_object *master_object = parameter;
     const int type = CS101_ASDU_getTypeID(asdu);
     const char *typeStr = TypeID_toString(type);
     const int cot = CS101_ASDU_getCOT(asdu);
@@ -1871,6 +1867,14 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
            CS101_ASDU_getNumberOfElements(asdu),
            CS101_CauseOfTransmission_toString(cot),
            cot);
+
+    struct connection_parameter *parameter_obj = parameter;
+    if (cot == CS101_COT_ACTIVATION_TERMINATION) {
+        parameter_obj->CONNECTION_CLOSING_FLAG = true;
+        //exit(EXIT_SUCCESS);
+    }
+
+    struct json_object *master_object = parameter_obj->master_object;
     switch (type) {
         case M_SP_NA_1: // "Single-point information"
             jsonify_M_SP_NA_1(asdu, master_object);
@@ -2079,21 +2083,36 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
 
 static int
 iec_104_fetch(struct lua_State *L) {
+#if defined(STANDALONE)
+	return 0;
+}
 
+int main(int argc, char **argv) {
+#endif
     const char *ip;
     uint16_t port;
 
+#if defined(STANDALONE)
+    if (argc < 3) {
+		fprintf(stderr, "Usage: %s <host> <port>\n", argv[0]);
+		exit(EXIT_FAILURE);
+	}
+	ip = argv[1];
+	port = (uint16_t)strtol(argv[2], NULL, 10);
+#else
     if (lua_gettop(L) < 2)
     		luaL_error(L, "Usage: fetch(host: string, port: number)");
 
     ip = lua_tostring(L, 1);
     port = lua_tointeger(L, 2);
+#endif
+    struct connection_parameter parameter = {0};
 
     //printf("Connecting to: %s:%i\n", ip, port);
     CS104_Connection con = CS104_Connection_create(ip, port);
-    json_object *master_object = create_master_object(ip, port);
-    CS104_Connection_setConnectionHandler(con, connectionHandler, master_object);
-    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, master_object);
+    parameter.master_object = create_master_object(ip, port);
+    CS104_Connection_setConnectionHandler(con, connectionHandler, &parameter);
+    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, &parameter);
 
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
@@ -2101,25 +2120,43 @@ iec_104_fetch(struct lua_State *L) {
         long int time_start;
         long int time_current;
         time_start = time(NULL);
-        while (!CONNECTION_CLOSING_FLAG) {
+        while (!parameter.CONNECTION_CLOSING_FLAG) {
             Thread_sleep(100);
             time_current = time(NULL);
             if (time_current - time_start > 15) {
+                printf("Timed out receiving data\n");
                 break;
             }
         }
+        printf("Sending StopDT\n");
         CS104_Connection_sendStopDT(con);
-        CONNECTION_CLOSING_FLAG = false;
+        while (!parameter.CONNECTION_CLOSED_FLAG) {
+            Thread_sleep(100);
+            time_current = time(NULL);
+            if (time_current - time_start > 15) {
+                printf("Timed out closing the connection\n");
+                break;
+            }
+        }
+        printf("Destroying the connection\n");
+        CS104_Connection_destroy(con);
+        printf("Destroyed the connection\n");
     }
     else {
 
     }
 
-    const char *json_string = json_object_to_json_string(master_object);
-    lua_pushstring(L, json_string);
+    const char *json_string = json_object_get_string(parameter.master_object);
 
-    free((char *)json_string);
-    //json_object_put(master_object);
+#if defined(STANDALONE)
+    printf("%s\n", json_string);
+#else
+    lua_pushstring(L, json_string);
+#endif
+
+    json_object_put(parameter.master_object);
+    parameter.master_object = NULL;
+
 
     return 1;
     //printf("exit\n");
