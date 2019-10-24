@@ -319,7 +319,7 @@ char *addresss_to_string(int channel_id) {
     return "unknown channel";
 }
 
-static char *QualityToString(unsigned int quality) {
+static char *QualityToString(QualityDescriptor quality) {
     char buf[80];
     if (quality == IEC60870_QUALITY_GOOD) {
         return strdup("GOOD");
@@ -334,6 +334,7 @@ static char *QualityToString(unsigned int quality) {
              (quality & IEC60870_QUALITY_INVALID ? "INVALID|" : "")
     );
     buf[79] = '\0';
+    buf[strlen(buf)] = '\0';
     return strdup(buf);
 }
 
