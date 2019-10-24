@@ -476,10 +476,6 @@ static void jsonify_M_SP_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
         json_object_object_add(measurement, OBJECT_COT,
                                json_object_new_string(CS101_CauseOfTransmission_toString(CS101_ASDU_getCOT(asdu))));
 
-        char *quality = QualityToString(MeasuredValueShort_getQuality((MeasuredValueShort) io));
-        json_object_object_add(measurement, OBJECT_QUALITY, json_object_new_string(quality));
-        free(quality);
-
         put_measurement(master_object, measurement);
         SinglePointInformation_destroy((SinglePointInformation) io);
     }
