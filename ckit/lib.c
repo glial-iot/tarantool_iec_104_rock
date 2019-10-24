@@ -602,9 +602,6 @@ static void jsonify_M_BO_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
         if (InformationObject_getObjectAddress(io) == 1000 ){
             json_object_object_add(master_object, DEVICE_ID, json_object_new_string(value));
         }
-        else {
-            json_object_object_add(master_object, DEVICE_ID, json_object_new_string("NO_IOA_1000_PRESENT"));
-        }
 
         json_object_object_add(measurement, OBJECT_COT,
                                json_object_new_string(CS101_CauseOfTransmission_toString(CS101_ASDU_getCOT(asdu))));
