@@ -25,6 +25,7 @@
 #define QOI "qoi"
 #define QCC "qcc"
 #define ADDRESS "address"
+#define DEVICE_ID "device_id"
 #define PORT "port"
 #define MEASUREMENTS "measurements"
 
@@ -590,7 +591,13 @@ static void jsonify_M_BO_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
                                json_object_new_string(TypeID_toString(CS101_ASDU_getTypeID(asdu))));
         json_object_object_add(measurement, OBJECT_ADDRESS,
                                json_object_new_int(InformationObject_getObjectAddress(io)));
+
         json_object_object_add(measurement, OBJECT_VALUE, json_object_new_string(value));
+
+        if (InformationObject_getObjectAddress(io) == 1000 ){
+            json_object_object_add(master_object, DEVICE_ID, json_object_new_string(value));
+        }
+
         json_object_object_add(measurement, OBJECT_COT,
                                json_object_new_string(CS101_CauseOfTransmission_toString(CS101_ASDU_getCOT(asdu))));
 
@@ -599,6 +606,8 @@ static void jsonify_M_BO_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
         free(quality);
 
         put_measurement(master_object, measurement);
+
+
 
         BitString32_destroy((BitString32) io);
     }
@@ -2138,13 +2147,16 @@ int main(int argc, char **argv) {
     }
 
     const char *json_string = json_object_get_string(parameter.master_object);
+
 #if defined(STANDALONE)
     printf("%s\n", json_string);
 #else
     lua_pushstring(L, json_string);
 #endif
+
     json_object_put(parameter.master_object);
     parameter.master_object = NULL;
+
 
     return 1;
     //printf("exit\n");
