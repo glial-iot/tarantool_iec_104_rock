@@ -29,9 +29,9 @@
 #define PORT "port"
 #define MEASUREMENTS "measurements"
 
-struct channel_desc_entry {
-    int channelId;
-    char *channelDesc;
+struct ioa_description_entry {
+    int ioa;
+    char *description;
 };
 
 struct connection_parameter {
@@ -40,7 +40,7 @@ struct connection_parameter {
     struct json_object *master_object;
 };
 
-struct channel_desc_entry entries[] = {
+struct ioa_description_entry ioa_descriptions[] = {
         {100,  "Power Active channel 1"},
         {116,  "Power Active channel 2"},
         {132,  "Power Active channel 3"},
@@ -315,13 +315,13 @@ struct channel_desc_entry entries[] = {
         {4431, "T4 Energy Reactive reverse channel 8"},
 };
 
-char *addresss_to_string(int channel_id) {
-    for (int i = 0; i < sizeof(entries) / sizeof(entries[0]); i++) {
-        if (entries[i].channelId == channel_id) {
-            return entries[i].channelDesc;
+char *ioa_to_string(int ioa) {
+    for (unsigned long i = 0; i < sizeof(ioa_descriptions) / sizeof(ioa_descriptions[0]); i++) {
+        if (ioa_descriptions[i].ioa == ioa) {
+            return ioa_descriptions[i].description;
         }
     }
-    return "unknown channel";
+    return "unknown IOA";
 }
 
 static char *QualityToString(QualityDescriptor quality) {
@@ -434,7 +434,7 @@ static void put_measurement(struct json_object *master_object, struct json_objec
     json_object_object_get_ex(measurement, OBJECT_ADDRESS, &ioa);
     int ioa_int = json_object_get_int(ioa);
 
-    struct json_object *desc = json_object_new_string(addresss_to_string(ioa_int));
+    struct json_object *desc = json_object_new_string(ioa_to_string(ioa_int));
     json_object_object_add(measurement, OBJECT_DESCRIPTION, desc);
 
     struct json_object *cot_json;
