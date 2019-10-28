@@ -1792,6 +1792,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
  */
 static bool
 asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
+    (void) address;
     const int type = CS101_ASDU_getTypeID(asdu);
     const char *typeStr = TypeID_toString(type);
     const int cot = CS101_ASDU_getCOT(asdu);
@@ -2018,6 +2019,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
 static int
 iec_104_fetch(struct lua_State *L) {
 #if defined(STANDALONE)
+	(void) L;
 	return 0;
 }
 
