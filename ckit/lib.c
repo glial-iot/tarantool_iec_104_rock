@@ -437,10 +437,6 @@ static void put_measurement(struct json_object *master_object, struct json_objec
     struct json_object *desc = json_object_new_string(ioa_to_string(ioa_int));
     json_object_object_add(measurement, OBJECT_DESCRIPTION, desc);
 
-    struct json_object *cot_json;
-    json_object_object_get_ex(measurement, OBJECT_COT, &cot_json);
-    const char *cot = json_object_get_string(cot_json);
-//    if(strcmp(cot, CS101_CauseOfTransmission_toString(CS101_COT_INTERROGATED_BY_STATION)) == 0) {
     struct json_object *measurements_array;
     json_object_object_get_ex(master_object, MEASUREMENTS, &measurements_array);
 
@@ -1760,24 +1756,6 @@ static void jsonify_F_DR_TA_1(struct sCS101_ASDU *asdu, struct json_object *mast
 }
 */
 
-
-/* Callback handler to log sent or received messages (optional) */
-static void
-rawMessageHandler(void *parameter, uint8_t *msg, int msgSize, bool sent) {
-    (void) parameter;
-    if (sent)
-        printf("SEND: ");
-    else
-        printf("RCVD: ");
-
-    int i;
-    for (i = 0; i < msgSize; i++) {
-        printf("%02x ", msg[i]);
-    }
-
-    printf("\n");
-}
-
 /* Connection event handler */
 static void
 connectionHandler(void *parameter, CS104_Connection connection, CS104_ConnectionEvent event) {
@@ -1804,50 +1782,6 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
         default:
             fprintf(stderr, "Received unknown event %d\n", event);
             exit(EXIT_FAILURE);
-    }
-}
-
-void handle_M_ME_TE_1(struct sCS101_ASDU *asdu) {
-    printf("  measured scaled values with CP56Time2a timestamp:\n");
-
-    int i;
-
-    for (i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
-
-        MeasuredValueScaledWithCP56Time2a io =
-                (MeasuredValueScaledWithCP56Time2a) CS101_ASDU_getElement(asdu, i);
-
-        printf("    IOA: %i value: %i\n",
-               InformationObject_getObjectAddress((InformationObject) io),
-               MeasuredValueScaled_getValue((MeasuredValueScaled) io)
-        );
-
-        MeasuredValueScaledWithCP56Time2a_destroy(io);
-    }
-}
-
-void handle_M_ME_TB_1(struct sCS101_ASDU *asdu) {
-    printf("  scaled measured value (-32768 ... +32767) with CP24Time2a:\n");
-
-    int i;
-
-    for (i = 0; i < CS101_ASDU_getNumberOfElements(asdu); i++) {
-
-        MeasuredValueScaledWithCP24Time2a io =
-                (MeasuredValueScaledWithCP24Time2a) CS101_ASDU_getElement(asdu, i);
-
-        char *time;
-        printf("    IOA: %i value: %d Timestamp: ",
-               InformationObject_getObjectAddress((InformationObject) io),
-               MeasuredValueScaled_getValue((MeasuredValueScaled) io)
-        );
-        CP24Time2a timestamp = MeasuredValueScaledWithCP24Time2a_getTimestamp(io);
-        printf("%d:%d.%d\n",
-               CP24Time2a_getMinute(timestamp),
-               CP24Time2a_getSecond(timestamp),
-               CP24Time2a_getMillisecond(timestamp)
-        );
-        MeasuredValueScaledWithCP24Time2a_destroy(io);
     }
 }
 
