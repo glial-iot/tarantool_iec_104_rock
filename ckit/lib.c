@@ -35,8 +35,8 @@
 struct context {
     const char *host;
     u_int16_t port;
-    bool CONNECTION_CLOSING_FLAG;
-    bool CONNECTION_CLOSED_FLAG;
+    bool CONNECTION_CLOSING;
+    bool CONNECTION_CLOSED;
     struct json_object *master_object;
 };
 
@@ -46,8 +46,8 @@ static void context_dump(struct context *context) {
     printf("context=%p\n", context);
     printf("host=%s\n", context->host);
     printf("port=%d\n", context->port);
-    printf("CONNECTION_CLOSING_FLAG=%d\n", context->CONNECTION_CLOSING_FLAG);
-    printf("CONNECTION_CLOSED_FLAG=%d\n", context->CONNECTION_CLOSED_FLAG);
+    printf("CONNECTION_CLOSING=%d\n", context->CONNECTION_CLOSING);
+    printf("CONNECTION_CLOSED=%d\n", context->CONNECTION_CLOSED);
     printf("master_object=%s\n",
            context->master_object == NULL ? "NULL" : json_object_get_string(context->master_object));
     puts("");
@@ -418,7 +418,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_CLOSED:
             printf("Connection closed\n");
-            context->CONNECTION_CLOSED_FLAG = true;
+            context->CONNECTION_CLOSED = true;
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
             printf("Received STARTDT_CON\n");
@@ -427,7 +427,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_STOPDT_CON_RECEIVED:
             printf("Received STOPDT_CON - closing connection\n");
-            context->CONNECTION_CLOSING_FLAG = true;
+            context->CONNECTION_CLOSING = true;
             CS104_Connection_close(connection);
             break;
         default:
@@ -456,7 +456,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
 
     struct context *context = parameter;
     if (cot == CS101_COT_ACTIVATION_TERMINATION) {
-        context->CONNECTION_CLOSING_FLAG = true;
+        context->CONNECTION_CLOSING = true;
         //exit(EXIT_SUCCESS);
     }
 
@@ -708,7 +708,7 @@ int main(int argc, char **argv) {
         long int time_start;
         long int time_current;
         time_start = time(NULL);
-        while (!context.CONNECTION_CLOSING_FLAG) {
+        while (!context.CONNECTION_CLOSING) {
             Thread_sleep(100);
             time_current = time(NULL);
             if (time_current - time_start > 15) {
@@ -718,7 +718,7 @@ int main(int argc, char **argv) {
         }
         printf("Sending StopDT\n");
         CS104_Connection_sendStopDT(con);
-        while (!context.CONNECTION_CLOSED_FLAG) {
+        while (!context.CONNECTION_CLOSED) {
             Thread_sleep(100);
             time_current = time(NULL);
             if (time_current - time_start > 15) {
