@@ -713,52 +713,24 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
     return true;
 }
 
-static int
-iec_104_fetch(struct lua_State *L) {
-#if defined(STANDALONE)
-	(void) L;
-	return 0;
-}
-
-int main(int argc, char **argv) {
-#endif
-    struct context context = {};
-
-#if defined(STANDALONE)
-    if (argc < 4) {
-		fprintf(stderr, "Usage: %s <host> <port>\n", argv[0]);
-		exit(EXIT_FAILURE);
-	}
-	context.host = argv[1];
-	context.port = (uint16_t)strtol(argv[2], NULL, 10);
-	context.domain_socket_name = argv[3];
-#else
-    if (lua_gettop(L) < 3){
-        luaL_error(L, "Usage: fetch(host: string, port: number, domain_socket_name: string)");
-    }
-
-    context.host = lua_tostring(L, 1);
-    context.port = lua_tointeger(L, 2);
-    context.domain_socket_name = lua_tostring(L, 3);
-#endif
-
+static void iec_104_fetch_internal(struct context *context) {
     if (CONTEXT_DEBUG) {
-        context_dump(&context);
+        context_dump(context);
     }
 
-    //printf("Connecting to: %s:%i\n", context.host, context.port);
-    CS104_Connection con = CS104_Connection_create(context.host, context.port);
-    context.master_object = master_object_create(&context);
-    CS104_Connection_setConnectionHandler(con, connectionHandler, &context);
-    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, &context);
+    //printf("Connecting to: %s:%i\n", context->host, context->port);
+    CS104_Connection con = CS104_Connection_create(context->host, context->port);
+    context->master_object = master_object_create(context);
+    CS104_Connection_setConnectionHandler(con, connectionHandler, context);
+    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, context);
 
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
-    if(CS104_Connection_connect(con)) {
+    if (CS104_Connection_connect(con)) {
         long int time_start;
         long int time_current;
         time_start = time(NULL);
-        while (!context.CONNECTION_CLOSING) {
+        while (!context->CONNECTION_CLOSING) {
             Thread_sleep(100);
             time_current = time(NULL);
             if (time_current - time_start > 15) {
@@ -768,7 +740,7 @@ int main(int argc, char **argv) {
         }
         printf("Sending StopDT\n");
         CS104_Connection_sendStopDT(con);
-        while (!context.CONNECTION_CLOSED) {
+        while (!context->CONNECTION_CLOSED) {
             Thread_sleep(100);
             time_current = time(NULL);
             if (time_current - time_start > 15) {
@@ -779,20 +751,47 @@ int main(int argc, char **argv) {
         printf("Destroying the connection\n");
         CS104_Connection_destroy(con);
         printf("Destroyed the connection\n");
-    }
-    else {
+    } else {
 
     }
 
-    const char *json_string = json_object_get_string(context.master_object);
-    send_data_to_domain_socket(&context, json_string);
-    json_object_put(context.master_object);
-    context.master_object = NULL;
+    const char *json_string = json_object_get_string(context->master_object);
+    send_data_to_domain_socket(context, json_string);
+    json_object_put(context->master_object);
+    context->master_object = NULL;
 
-    return 0;
     //printf("exit\n");
 }
 
+#if defined STANDALONE
+
+int main(int argc, char **argv) {
+    struct context context = {};
+    if (argc < 4) {
+        fprintf(stderr, "Usage: %s <host> <port> <socket_file>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    context.host = argv[1];
+    context.port = (uint16_t) strtol(argv[2], NULL, 10);
+    context.domain_socket_name = argv[3];
+    iec_104_fetch_internal(&context);
+}
+
+#else
+
+static int
+iec_104_fetch(struct lua_State *L) {
+    struct context context = {};
+    if (lua_gettop(L) < 3) {
+        luaL_error(L, "Usage: fetch(host: string, port: number, domain_socket_name: string)");
+    }
+
+    context.host = lua_tostring(L, 1);
+    context.port = lua_tointeger(L, 2);
+    context.domain_socket_name = lua_tostring(L, 3);
+    iec_104_fetch_internal(&context);
+    return 0;
+}
 
 /* exported function */
 LUA_API int
@@ -807,4 +806,5 @@ luaopen_ckit_lib(lua_State *L)
 	luaL_register(L, NULL, meta);
 	return 1;
 }
+#endif
 /* vim: syntax=c ts=8 sts=8 sw=8 noet */
