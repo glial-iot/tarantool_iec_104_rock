@@ -28,6 +28,7 @@
 #define QOI "qoi"
 #define QCC "qcc"
 #define HOST "address" // TODO: change value to "host"
+#define IOA_DEVICE_ID (1000)
 #define DEVICE_ID "device_id"
 #define PORT "port"
 #define MEASUREMENTS "measurements"
@@ -38,6 +39,7 @@ struct context {
     bool CONNECTION_CLOSING;
     bool CONNECTION_CLOSED;
     struct json_object *master_object;
+    char *device_id;
 };
 
 static void context_dump(struct context *context) {
@@ -50,6 +52,7 @@ static void context_dump(struct context *context) {
     printf("CONNECTION_CLOSED=%d\n", context->CONNECTION_CLOSED);
     printf("master_object=%s\n",
            context->master_object == NULL ? "NULL" : json_object_get_string(context->master_object));
+    printf("device_id=%s\n", context->device_id);
     puts("");
     fflush(stdout);
 }
@@ -168,6 +171,9 @@ static struct json_object *master_object_create(struct context *context) {
     json_object_object_add(master_object, PORT, json_object_new_int(context->port));
     json_object_object_add(master_object, OBJECT_TIMESTAMP, json_object_new_int64(currentTimeMillis()));
     json_object_object_add(master_object, MEASUREMENTS, json_object_new_array());
+    if (context->device_id) {
+        json_object_object_add(context->master_object, DEVICE_ID, json_object_new_string(context->device_id));
+    }
     return master_object;
 }
 
@@ -235,8 +241,10 @@ static void jsonify_M_BO_NA_1(struct sCS101_ASDU *asdu, struct context *context)
 
         json_object_object_add(measurement, OBJECT_VALUE, json_object_new_string(value));
 
-        if (InformationObject_getObjectAddress(io) == 1000 ){
+        if (InformationObject_getObjectAddress(io) == IOA_DEVICE_ID ){
             json_object_object_add(context->master_object, DEVICE_ID, json_object_new_string(value));
+            free(context->device_id);
+            context->device_id = strdup(value);
         }
 
         json_object_object_add(measurement, OBJECT_COT,
