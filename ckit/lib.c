@@ -789,9 +789,20 @@ static int iec_104_fetch_internal(const char *address, const uint16_t port, cons
 
 #if defined STANDALONE
 
+void usage(const char *name, FILE *stream) {
+    fprintf(stream, "Usage: %s <host> <port> <socket_file> [<host> <port> <socket_file>]...\n", name);
+    fprintf(stream, "    You could use ncat  --listen --keep-open --unixsock /tmp/socket for debugging\n");
+    fprintf(stream, "        Don't forget to remove old socket file before restarting ncat or it will fail\n");
+    fprintf(stream, "        ncat may be located in nmap or ncat (Debian/Ubuntu) package\n");
+}
+
 int main(int argc, char **argv) {
+    if (argc == 2 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h"))) {
+        usage(argv[0], stdout);
+        exit(EXIT_SUCCESS);
+    }
     if (argc < 4) {
-        fprintf(stderr, "Usage: %s <host> <port> <socket_file> [<host> <port> <socket_file>]...\n", argv[0]);
+        usage(argv[0], stderr);
         exit(EXIT_FAILURE);
     }
     while (argc >= 4) {
