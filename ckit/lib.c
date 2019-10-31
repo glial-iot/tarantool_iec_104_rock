@@ -16,6 +16,8 @@
 #include <string.h>
 #include "ioa_descriptions.h"
 
+#define CONTEXT_DEBUG false
+
 #define OBJECT_ADDRESS "objectAddress"
 #define OBJECT_TYPE "objectType"
 #define OBJECT_VALUE "value"
@@ -35,6 +37,18 @@ struct context {
     bool CONNECTION_CLOSED_FLAG;
     struct json_object *master_object;
 };
+
+static void context_dump(struct context *context) {
+    fflush(stdout);
+    puts("");
+    printf("context=%p\n", context);
+    printf("CONNECTION_CLOSING_FLAG=%d\n", context->CONNECTION_CLOSING_FLAG);
+    printf("CONNECTION_CLOSED_FLAG=%d\n", context->CONNECTION_CLOSED_FLAG);
+    printf("master_object=%s\n",
+           context->master_object == NULL ? "NULL" : json_object_get_string(context->master_object));
+    puts("");
+    fflush(stdout);
+}
 
 char *ioa_to_string(int ioa) {
     for (unsigned long i = 0; i < sizeof(ioa_descriptions) / sizeof(ioa_descriptions[0]); i++) {
@@ -675,6 +689,9 @@ int main(int argc, char **argv) {
     port = lua_tointeger(L, 2);
 #endif
     struct context context = {};
+    if (CONTEXT_DEBUG) {
+        context_dump(&context);
+    }
 
     //printf("Connecting to: %s:%i\n", ip, port);
     CS104_Connection con = CS104_Connection_create(ip, port);
