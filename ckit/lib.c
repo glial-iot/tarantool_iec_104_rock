@@ -36,6 +36,7 @@
 #define DEVICE_ID "device_id"
 #define PORT "port"
 #define MEASUREMENTS "measurements"
+#define RECONNECT_TIMEOUT (10) // 10 seconds
 
 struct context {
     const char *host;
@@ -729,7 +730,10 @@ static void *iec_104_fetch_thread(void *arg) {
 
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
-    if (CS104_Connection_connect(con)) {
+
+    bool connected = CS104_Connection_connect(con);
+    printf(connected ? "%s:%i Connected\n" : "%s:%i NOT conneted\n", context->host, context->port);
+    if (connected) {
         long int time_start;
         long int time_current;
         time_start = time(NULL);
@@ -755,7 +759,10 @@ static void *iec_104_fetch_thread(void *arg) {
         CS104_Connection_destroy(con);
         printf("Destroyed the connection\n");
     } else {
-
+        printf("%s:%i Sleeping %d seconds before reconnect\n", context->host, context->port, RECONNECT_TIMEOUT);
+        Thread_sleep(RECONNECT_TIMEOUT * 1000);
+        printf("%s:%i Sleeping %d seconds before reconnect done, reconnecting\n",
+                context->host, context->port, RECONNECT_TIMEOUT);
     }
 
     const char *json_string = json_object_get_string(context->master_object);
