@@ -414,27 +414,30 @@ static void jsonify_C_CS_NA_1(struct sCS101_ASDU *asdu, struct context *context)
 static void
 connectionHandler(void *parameter, CS104_Connection connection, CS104_ConnectionEvent event) {
     struct context* context = parameter;
+    if(CONTEXT_DEBUG) {
+        context_dump(context);
+    }
     switch (event) {
         case CS104_CONNECTION_OPENED:
-            printf("Connection established\n");
+            printf("%s:%d Connection established\n", context->host, context->port);
             CS104_Connection_sendStartDT(connection);
             break;
         case CS104_CONNECTION_CLOSED:
-            printf("Connection closed\n");
+            printf("%s:%d Connection closed\n", context->host, context->port);
             context->CONNECTION_CLOSED = true;
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
-            printf("Received STARTDT_CON\n");
+            printf("%s:%d Received STARTDT_CON\n", context->host, context->port);
             CS104_Connection_sendInterrogationCommand(connection, CS101_COT_ACTIVATION, 1, IEC60870_QOI_STATION);
 //            CS104_Connection_sendCounterInterrogationCommand(connection, IEC60870_QCC_RQT_GENERAL, 1, IEC60870_QOI_STATION); // TODO: Verify
             break;
         case CS104_CONNECTION_STOPDT_CON_RECEIVED:
-            printf("Received STOPDT_CON - closing connection\n");
+            printf("%s:%d Received STOPDT_CON - closing connection\n", context->host, context->port);
             context->CONNECTION_CLOSING = true;
             CS104_Connection_close(connection);
             break;
         default:
-            fprintf(stderr, "Received unknown event %d\n", event);
+            fprintf(stderr, "%s:%d ERROR: Received unknown event %d\n", context->host, context->port, event);
             exit(EXIT_FAILURE);
     }
 }
