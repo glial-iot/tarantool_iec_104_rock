@@ -8,6 +8,8 @@ endif(APPLE)
 add_library(lib SHARED lib.c)
 target_link_libraries(lib ${MSGPUCK_LIBRARIES} lib60870 json-c)
 set_target_properties(lib PROPERTIES PREFIX "" OUTPUT_NAME "lib")
+set_target_properties(lib PROPERTIES COMPILE_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+set_target_properties(lib PROPERTIES COMPILE_FLAGS "${CMAKE_LINK_LIBRARY_FLAG} -pthread")
 
 # Install module
 install(FILES init.lua DESTINATION ${TARANTOOL_INSTALL_LUADIR}/${PROJECT_NAME}/)

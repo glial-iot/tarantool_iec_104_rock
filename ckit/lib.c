@@ -17,6 +17,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <pthread.h>
 #include "ioa_descriptions.h"
 
 #define CONTEXT_DEBUG false
@@ -713,7 +714,9 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
     return true;
 }
 
-static void iec_104_fetch_internal(struct context *context) {
+static void *iec_104_fetch_thread(void *arg) {
+    struct context *context = arg;
+    printf("%s:%i Starging new thread\n", context->host, context->port);
     if (CONTEXT_DEBUG) {
         context_dump(context);
     }
@@ -758,38 +761,63 @@ static void iec_104_fetch_internal(struct context *context) {
     const char *json_string = json_object_get_string(context->master_object);
     send_data_to_domain_socket(context, json_string);
     json_object_put(context->master_object);
-    context->master_object = NULL;
+    printf("%s:%d Thread finished\n", context->host, context->port);
+    free(context);
+    return NULL;
+}
 
-    //printf("exit\n");
+static int iec_104_fetch_internal(const char *address, const uint16_t port, const char *domain_socket_name) {
+    struct context *context = calloc(1, sizeof(struct context));
+    if (context == NULL) {
+        perror("ERROR: unable to allocate memory for context");
+        return EXIT_FAILURE;
+    }
+
+    context->host = address;
+    context->port = port;
+    context->domain_socket_name = domain_socket_name;
+
+    Thread thread = Thread_create(&iec_104_fetch_thread, context, true);
+    if (thread != NULL) {
+        Thread_start(thread);
+    } else {
+        perror("ERROR: Unable to create thread");
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }
 
 #if defined STANDALONE
 
 int main(int argc, char **argv) {
-    struct context context = {};
     if (argc < 4) {
-        fprintf(stderr, "Usage: %s <host> <port> <socket_file>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <host> <port> <socket_file> [<host> <port> <socket_file>]...\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    context.host = argv[1];
-    context.port = (uint16_t) strtol(argv[2], NULL, 10);
-    context.domain_socket_name = argv[3];
-    iec_104_fetch_internal(&context);
+    while (argc >= 4) {
+        const char *host = argv[1];
+        const uint16_t port = (uint16_t) strtol(argv[2], NULL, 10);
+        const char *domain_socket_name = argv[3];
+        printf("Starting new thread to serve %s:%d with domain socket %s\n", host, port, domain_socket_name);
+        iec_104_fetch_internal(host, port, domain_socket_name);
+        argc -= 3;
+        argv += 3;
+    }
+    Thread_sleep(128 * 1000); // Run background threads for 128 seconds
 }
 
 #else
 
 static int
 iec_104_fetch(struct lua_State *L) {
-    struct context context = {};
     if (lua_gettop(L) < 3) {
         luaL_error(L, "Usage: fetch(host: string, port: number, domain_socket_name: string)");
     }
 
-    context.host = lua_tostring(L, 1);
-    context.port = lua_tointeger(L, 2);
-    context.domain_socket_name = lua_tostring(L, 3);
-    iec_104_fetch_internal(&context);
+    const char *host = lua_tostring(L, 1);
+    const uint16_t port = lua_tointeger(L, 2);
+    const char *domain_socket_name = lua_tostring(L, 3);
+    iec_104_fetch_internal(host, port, domain_socket_name);
     return 0;
 }
 
