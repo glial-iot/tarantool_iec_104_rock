@@ -14,6 +14,9 @@
 #include <time.h>
 #include <sys/time.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 #include "ioa_descriptions.h"
 
 #define CONTEXT_DEBUG false
@@ -36,6 +39,7 @@
 struct context {
     const char *host;
     u_int16_t port;
+    const char *domain_socket_name;
     bool CONNECTION_CLOSING;
     bool CONNECTION_CLOSED;
     struct json_object *master_object;
@@ -48,6 +52,7 @@ static void context_dump(struct context *context) {
     printf("context=%p\n", context);
     printf("host=%s\n", context->host);
     printf("port=%d\n", context->port);
+    printf("domain_socket_name=%s\n", context->domain_socket_name);
     printf("CONNECTION_CLOSING=%d\n", context->CONNECTION_CLOSING);
     printf("CONNECTION_CLOSED=%d\n", context->CONNECTION_CLOSED);
     printf("master_object=%s\n",
@@ -55,6 +60,34 @@ static void context_dump(struct context *context) {
     printf("device_id=%s\n", context->device_id);
     puts("");
     fflush(stdout);
+}
+
+static void send_data_to_domain_socket(struct context *context, const char *data) {
+    struct sockaddr_un addr = {};
+    addr.sun_family = AF_UNIX;
+    const size_t max_socket_name_len = sizeof(addr.sun_path) - 1;
+    const ssize_t data_len = strlen(data);
+    if (strlen(context->domain_socket_name) > max_socket_name_len) {
+        fprintf(stderr, "ERROR: socket name \"%s\" is too long (max len = %ld)\n",
+                context->domain_socket_name, max_socket_name_len);
+    }
+    strncpy(addr.sun_path, context->domain_socket_name, max_socket_name_len);
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) {
+        perror("ERROR: Can't create socket for LUA connection");
+        return;
+    }
+    if (connect(fd, (const struct sockaddr *) &addr, sizeof(addr)) == -1) {
+        perror("ERROR: Can't connect to LUA socket");
+        close(fd);
+        return;
+    }
+    if (write(fd, data, strlen(data)) != data_len) {
+        perror("ERROR: Can't write to LUA socket");
+        close(fd);
+        return;
+    }
+    close(fd);
 }
 
 char *ioa_to_string(int ioa) {
@@ -692,18 +725,21 @@ int main(int argc, char **argv) {
     struct context context = {};
 
 #if defined(STANDALONE)
-    if (argc < 3) {
+    if (argc < 4) {
 		fprintf(stderr, "Usage: %s <host> <port>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 	context.host = argv[1];
 	context.port = (uint16_t)strtol(argv[2], NULL, 10);
+	context.domain_socket_name = argv[3];
 #else
-    if (lua_gettop(L) < 2)
-    		luaL_error(L, "Usage: fetch(host: string, port: number)");
+    if (lua_gettop(L) < 3){
+        luaL_error(L, "Usage: fetch(host: string, port: number, domain_socket_name: string)");
+    }
 
     context.host = lua_tostring(L, 1);
     context.port = lua_tointeger(L, 2);
+    context.domain_socket_name = lua_tostring(L, 3);
 #endif
 
     if (CONTEXT_DEBUG) {
@@ -749,18 +785,11 @@ int main(int argc, char **argv) {
     }
 
     const char *json_string = json_object_get_string(context.master_object);
-
-#if defined(STANDALONE)
-    printf("%s\n", json_string);
-#else
-    lua_pushstring(L, json_string);
-#endif
-
+    send_data_to_domain_socket(&context, json_string);
     json_object_put(context.master_object);
     context.master_object = NULL;
 
-
-    return 1;
+    return 0;
     //printf("exit\n");
 }
 
