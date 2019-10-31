@@ -33,6 +33,8 @@
 #define MEASUREMENTS "measurements"
 
 struct context {
+    const char *host;
+    u_int16_t port;
     bool CONNECTION_CLOSING_FLAG;
     bool CONNECTION_CLOSED_FLAG;
     struct json_object *master_object;
@@ -42,6 +44,8 @@ static void context_dump(struct context *context) {
     fflush(stdout);
     puts("");
     printf("context=%p\n", context);
+    printf("host=%s\n", context->host);
+    printf("port=%d\n", context->port);
     printf("CONNECTION_CLOSING_FLAG=%d\n", context->CONNECTION_CLOSING_FLAG);
     printf("CONNECTION_CLOSED_FLAG=%d\n", context->CONNECTION_CLOSED_FLAG);
     printf("master_object=%s\n",
@@ -671,31 +675,30 @@ iec_104_fetch(struct lua_State *L) {
 
 int main(int argc, char **argv) {
 #endif
-    const char *ip;
-    uint16_t port;
+    struct context context = {};
 
 #if defined(STANDALONE)
     if (argc < 3) {
 		fprintf(stderr, "Usage: %s <host> <port>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	ip = argv[1];
-	port = (uint16_t)strtol(argv[2], NULL, 10);
+	context.host = argv[1];
+	context.port = (uint16_t)strtol(argv[2], NULL, 10);
 #else
     if (lua_gettop(L) < 2)
     		luaL_error(L, "Usage: fetch(host: string, port: number)");
 
-    ip = lua_tostring(L, 1);
-    port = lua_tointeger(L, 2);
+    context.host = lua_tostring(L, 1);
+    context.port = lua_tointeger(L, 2);
 #endif
-    struct context context = {};
+
     if (CONTEXT_DEBUG) {
         context_dump(&context);
     }
 
-    //printf("Connecting to: %s:%i\n", ip, port);
-    CS104_Connection con = CS104_Connection_create(ip, port);
-    context.master_object = create_master_object(ip, port);
+    //printf("Connecting to: %s:%i\n", context.host, context.port);
+    CS104_Connection con = CS104_Connection_create(context.host, context.port);
+    context.master_object = create_master_object(context.host, context.port);
     CS104_Connection_setConnectionHandler(con, connectionHandler, &context);
     CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, &context);
 
