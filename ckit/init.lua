@@ -1,41 +1,22 @@
---------------------------------------------------------------------------------
---- Example of a Lua module for Tarantool
---------------------------------------------------------------------------------
+local iec_104 = require('ckit.lib')
 
---
--- Dependencies
---
+libsocket = require "socket"
+libunix = require "socket.unix"
+socket = assert(libunix())
 
-local log = require('log') -- some other Tarantool module
+SOCKET_FILE = "/tmp/socket"
+os.remove(SOCKET_FILE)
+assert(socket:bind(SOCKET_FILE))
+assert(socket:listen())
 
--- C library
-local clib = require('ckit.lib')
--- Now you can use exported C functions from 'ckit/lib.c' submodule in your code
-
---
--- Constants
---
-
--- local variables are only visible from this file
-local SOME_CONSTANT = 10
-
---
--- Internal functions
---
-
--- Some internal function
-local function func(a, b)
-    log.info("func() called with a=%s b=%s", a, b)
-    return a + b
+iec_104.fetch("meter1.example.com", 2404, SOCKET_FILE, true);
+iec_104.fetch("meter2.example.com", 2404, SOCKET_FILE, true);
+while true do
+    conn = assert(socket:accept())
+    data=conn:receive("*a") -- receive all data from socket, until connection is closed
+    if (data ~= nil) then
+        print("Got data: " .. data)
+    else
+        print("Got no data!")
+    end
 end
-
---
--- Exported functions
---
-
--- result returned from require('ckit')
-return {
-    func = func; -- pure Lua function
-    cfunc = clib.fetch; -- C function
-}
--- vim: ts=4 sts=4 sw=4 et
