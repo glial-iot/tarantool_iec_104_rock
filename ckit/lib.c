@@ -30,12 +30,11 @@
 #define PORT "port"
 #define MEASUREMENTS "measurements"
 
-struct connection_parameter {
+struct context {
     bool CONNECTION_CLOSING_FLAG;
     bool CONNECTION_CLOSED_FLAG;
     struct json_object *master_object;
 };
-
 
 char *ioa_to_string(int ioa) {
     for (unsigned long i = 0; i < sizeof(ioa_descriptions) / sizeof(ioa_descriptions[0]); i++) {
@@ -395,7 +394,7 @@ static void jsonify_C_CS_NA_1(struct sCS101_ASDU *asdu, struct json_object *mast
 /* Connection event handler */
 static void
 connectionHandler(void *parameter, CS104_Connection connection, CS104_ConnectionEvent event) {
-    struct connection_parameter* parameter_obj = (struct connection_parameter*) parameter;
+    struct context* context = parameter;
     switch (event) {
         case CS104_CONNECTION_OPENED:
             printf("Connection established\n");
@@ -403,7 +402,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_CLOSED:
             printf("Connection closed\n");
-            parameter_obj->CONNECTION_CLOSED_FLAG = true;
+            context->CONNECTION_CLOSED_FLAG = true;
             break;
         case CS104_CONNECTION_STARTDT_CON_RECEIVED:
             printf("Received STARTDT_CON\n");
@@ -412,7 +411,7 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
             break;
         case CS104_CONNECTION_STOPDT_CON_RECEIVED:
             printf("Received STOPDT_CON - closing connection\n");
-            parameter_obj->CONNECTION_CLOSING_FLAG = true;
+            context->CONNECTION_CLOSING_FLAG = true;
             CS104_Connection_close(connection);
             break;
         default:
@@ -439,13 +438,13 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
            CS101_CauseOfTransmission_toString(cot),
            cot);
 
-    struct connection_parameter *parameter_obj = parameter;
+    struct context *context = parameter;
     if (cot == CS101_COT_ACTIVATION_TERMINATION) {
-        parameter_obj->CONNECTION_CLOSING_FLAG = true;
+        context->CONNECTION_CLOSING_FLAG = true;
         //exit(EXIT_SUCCESS);
     }
 
-    struct json_object *master_object = parameter_obj->master_object;
+    struct json_object *master_object = context->master_object;
     switch (type) {
         case M_SP_NA_1: // "Single-point information"
             jsonify_M_SP_NA_1(asdu, master_object);
@@ -678,13 +677,13 @@ int main(int argc, char **argv) {
     ip = lua_tostring(L, 1);
     port = lua_tointeger(L, 2);
 #endif
-    struct connection_parameter parameter = {0};
+    struct context context = {};
 
     //printf("Connecting to: %s:%i\n", ip, port);
     CS104_Connection con = CS104_Connection_create(ip, port);
-    parameter.master_object = create_master_object(ip, port);
-    CS104_Connection_setConnectionHandler(con, connectionHandler, &parameter);
-    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, &parameter);
+    context.master_object = create_master_object(ip, port);
+    CS104_Connection_setConnectionHandler(con, connectionHandler, &context);
+    CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, &context);
 
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
@@ -692,7 +691,7 @@ int main(int argc, char **argv) {
         long int time_start;
         long int time_current;
         time_start = time(NULL);
-        while (!parameter.CONNECTION_CLOSING_FLAG) {
+        while (!context.CONNECTION_CLOSING_FLAG) {
             Thread_sleep(100);
             time_current = time(NULL);
             if (time_current - time_start > 15) {
@@ -702,7 +701,7 @@ int main(int argc, char **argv) {
         }
         printf("Sending StopDT\n");
         CS104_Connection_sendStopDT(con);
-        while (!parameter.CONNECTION_CLOSED_FLAG) {
+        while (!context.CONNECTION_CLOSED_FLAG) {
             Thread_sleep(100);
             time_current = time(NULL);
             if (time_current - time_start > 15) {
@@ -718,7 +717,7 @@ int main(int argc, char **argv) {
 
     }
 
-    const char *json_string = json_object_get_string(parameter.master_object);
+    const char *json_string = json_object_get_string(context.master_object);
 
 #if defined(STANDALONE)
     printf("%s\n", json_string);
@@ -726,8 +725,8 @@ int main(int argc, char **argv) {
     lua_pushstring(L, json_string);
 #endif
 
-    json_object_put(parameter.master_object);
-    parameter.master_object = NULL;
+    json_object_put(context.master_object);
+    context.master_object = NULL;
 
 
     return 1;
