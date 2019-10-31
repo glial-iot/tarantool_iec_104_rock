@@ -27,7 +27,7 @@
 #define OBJECT_DESCRIPTION "description"
 #define QOI "qoi"
 #define QCC "qcc"
-#define ADDRESS "address"
+#define HOST "address" // TODO: change value to "host"
 #define DEVICE_ID "device_id"
 #define PORT "port"
 #define MEASUREMENTS "measurements"
@@ -159,10 +159,13 @@ static int64_t currentTimeMillis() {
     return s1 + s2;
 }
 
-static json_object *create_master_object(const char *address, const uint16_t port) {
+static struct json_object *master_object_create(struct context *context) {
     json_object *master_object = json_object_new_object();
-    json_object_object_add(master_object, ADDRESS, json_object_new_string(address));
-    json_object_object_add(master_object, PORT, json_object_new_int(port));
+    if (CONTEXT_DEBUG) {
+        context_dump(context);
+    }
+    json_object_object_add(master_object, HOST, json_object_new_string(context->host));
+    json_object_object_add(master_object, PORT, json_object_new_int(context->port));
     json_object_object_add(master_object, OBJECT_TIMESTAMP, json_object_new_int64(currentTimeMillis()));
     json_object_object_add(master_object, MEASUREMENTS, json_object_new_array());
     return master_object;
@@ -698,7 +701,7 @@ int main(int argc, char **argv) {
 
     //printf("Connecting to: %s:%i\n", context.host, context.port);
     CS104_Connection con = CS104_Connection_create(context.host, context.port);
-    context.master_object = create_master_object(context.host, context.port);
+    context.master_object = master_object_create(&context);
     CS104_Connection_setConnectionHandler(con, connectionHandler, &context);
     CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, &context);
 
