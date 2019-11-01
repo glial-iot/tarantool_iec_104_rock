@@ -10,6 +10,14 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_MODULE_PATH})
 
+# init git submodules
+execute_process(COMMAND git submodule update --init --recursive
+                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                        RESULT_VARIABLE GIT_SUBMOD_RESULT)
+if(NOT GIT_SUBMOD_RESULT EQUAL "0")
+            message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+        endif()
+
 # feature checks
 include(CheckLibraryExists)
 check_library_exists(rt clock_gettime "time.h" CONFIG_SYSTEM_HAS_CLOCK_GETTIME)
@@ -24,9 +32,9 @@ option(BUILD_COMMON "Build common code (shared with other libraries - e.g. libie
 
 if(BUILD_HAL)
 
-if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/lib60870-C/dependencies/mbedtls-2.6.0)
+if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/dependencies/mbedtls-2.6.0)
 set(WITH_MBEDTLS 1)
-endif(EXISTS ${CMAKE_CURRENT_LIST_DIR}/lib60870-C/dependencies/mbedtls-2.6.0)
+endif(EXISTS ${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/dependencies/mbedtls-2.6.0)
 
 endif(BUILD_HAL)
 
@@ -43,11 +51,11 @@ include_directories(${MSGPUCK_INCLUDE_DIRS})
 # Find other dependecies
 
 include_directories(
-    ${CMAKE_CURRENT_LIST_DIR}/lib60870-C/config
-    ${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api
-    ${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/internal
-    ${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/common/inc
-    ${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/hal/inc
+    ${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/config
+    ${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api
+    ${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/internal
+    ${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/common/inc
+    ${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/hal/inc
 )
 
 if(WITH_MBEDTLS)
@@ -64,23 +72,23 @@ add_definitions(-DMBEDTLS_CONFIG_FILE="mbedtls_config.h")
 endif(WITH_MBEDTLS)
 
 set(API_HEADERS
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/hal/inc/hal_time.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/hal/inc/hal_thread.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/hal/inc/hal_socket.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/hal/inc/hal_serial.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/hal/inc/tls_config.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api/cs101_master.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api/cs101_slave.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api/cs104_slave.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api/iec60870_master.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api/iec60870_slave.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api/iec60870_common.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api/cs101_information_objects.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api/cs104_connection.h
-	${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src/inc/api/link_layer_parameters.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/hal/inc/hal_time.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/hal/inc/hal_thread.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/hal/inc/hal_socket.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/hal/inc/hal_serial.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/hal/inc/tls_config.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api/cs101_master.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api/cs101_slave.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api/cs104_slave.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api/iec60870_master.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api/iec60870_slave.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api/iec60870_common.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api/cs101_information_objects.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api/cs104_connection.h
+	${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src/inc/api/link_layer_parameters.h
 )
 
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib60870-C/src)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib60870/lib60870-C/src)
 
 INSTALL(FILES ${API_HEADERS} DESTINATION include/lib60870 COMPONENT Development)
 
