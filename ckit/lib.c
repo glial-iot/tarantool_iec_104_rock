@@ -48,6 +48,13 @@ struct context {
     char *device_id;
 };
 
+static void context_destroy(struct context *context) {
+    free((char *) context->host);
+    free((char *) context->domain_socket_name);
+    free(context->device_id);
+    free(context);
+}
+
 static void context_dump(struct context *context) {
     fflush(stdout);
     puts("");
@@ -769,7 +776,7 @@ static void *iec_104_fetch_thread(void *arg) {
     send_data_to_domain_socket(context, json_string);
     json_object_put(context->master_object);
     printf("%s:%d Thread finished\n", context->host, context->port);
-    free(context);
+    context_destroy(context);
     return NULL;
 }
 
@@ -813,9 +820,9 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
     while (argc >= 4) {
-        const char *host = argv[1];
+        const char *host = strdup(argv[1]);
         const uint16_t port = (uint16_t) strtol(argv[2], NULL, 10);
-        const char *domain_socket_name = argv[3];
+        const char *domain_socket_name = strdup(argv[3]);
         printf("Starting new thread to serve %s:%d with domain socket %s\n", host, port, domain_socket_name);
         iec_104_fetch_internal(host, port, domain_socket_name);
         argc -= 3;
@@ -832,9 +839,9 @@ iec_104_fetch(struct lua_State *L) {
         luaL_error(L, "Usage: fetch(host: string, port: number, domain_socket_name: string)");
     }
 
-    const char *host = lua_tostring(L, 1);
+    const char *host = strdup(lua_tostring(L, 1));
     const uint16_t port = lua_tointeger(L, 2);
-    const char *domain_socket_name = lua_tostring(L, 3);
+    const char *domain_socket_name = strdup(lua_tostring(L, 3));
     iec_104_fetch_internal(host, port, domain_socket_name);
     return 0;
 }
