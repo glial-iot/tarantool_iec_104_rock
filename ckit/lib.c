@@ -18,6 +18,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <netinet/in.h>
+#include <netdb.h>
 #include "ioa_descriptions.h"
 
 #define CONTEXT_DEBUG false
@@ -37,11 +39,13 @@
 #define PORT "port"
 #define MEASUREMENTS "measurements"
 #define RECONNECT_TIMEOUT (10) // 10 seconds
+#define REPORTING_HOST "127.0.0.1"
 
 struct context {
     const char *host;
     u_int16_t port;
     const char *domain_socket_name;
+    u_int16_t tcp_reporting_port;
     bool CONNECTION_CLOSING;
     bool CONNECTION_CLOSED;
     struct json_object *master_object;
@@ -93,6 +97,44 @@ static void send_data_to_domain_socket(struct context *context, const char *data
     }
     if (write(fd, data, strlen(data)) != data_len) {
         perror("ERROR: Can't write to LUA socket");
+        close(fd);
+        return;
+    }
+    close(fd);
+}
+
+static void send_data_to_tcp_socket(struct context *context, const char *data) {
+    int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (fd < 0) {
+        perror("ERROR: Can't create socket for data reporting");
+        return;
+    }
+    struct sockaddr_in addr = {};
+    struct hostent *he;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(context->tcp_reporting_port);
+    // Convert IPv4 and IPv6 addresses from text to binary form
+    if ((he = gethostbyname(REPORTING_HOST)) == NULL) {  /* get the host info */
+        printf("ERROR: Failed to convert \"%s\" host name to address\n", REPORTING_HOST);
+        return;
+    }
+    addr.sin_addr = *((struct in_addr *) he->h_addr);
+    if (connect(fd, (const struct sockaddr *) &addr, sizeof(struct sockaddr)) == -1) {
+        char error_message_buffer[80] = {};
+        strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
+        fprintf(stderr, "ERROR: Can't connect to reporting socket %s:%d (%s)\n", REPORTING_HOST,
+                context->tcp_reporting_port,
+                error_message_buffer);
+        close(fd);
+        return;
+    }
+    const ssize_t data_len = strlen(data);
+    if (write(fd, data, strlen(data)) != data_len) {
+        char error_message_buffer[80] = {};
+        strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
+        fprintf(stderr, "ERROR: Can't write to reporting socket %s:%d (%s)\n", REPORTING_HOST,
+                context->tcp_reporting_port,
+                error_message_buffer);
         close(fd);
         return;
     }
@@ -773,14 +815,19 @@ static void *iec_104_fetch_thread(void *arg) {
     }
 
     const char *json_string = json_object_get_string(context->master_object);
-    send_data_to_domain_socket(context, json_string);
+    if (context->tcp_reporting_port != 0) {
+        send_data_to_tcp_socket(context, json_string);
+    } else {
+        send_data_to_domain_socket(context, json_string);
+    }
     json_object_put(context->master_object);
     printf("%s:%d Thread finished\n", context->host, context->port);
     context_destroy(context);
     return NULL;
 }
 
-static int iec_104_fetch_internal(const char *address, const uint16_t port, const char *domain_socket_name) {
+static int iec_104_fetch_internal(const char *address, const uint16_t port, const char *domain_socket_name,
+                                  const uint16_t reporting_port) {
     struct context *context = calloc(1, sizeof(struct context));
     if (context == NULL) {
         perror("ERROR: unable to allocate memory for context");
@@ -790,6 +837,7 @@ static int iec_104_fetch_internal(const char *address, const uint16_t port, cons
     context->host = address;
     context->port = port;
     context->domain_socket_name = domain_socket_name;
+    context->tcp_reporting_port = reporting_port;
 
     Thread thread = Thread_create(&iec_104_fetch_thread, context, true);
     if (thread != NULL) {
@@ -804,8 +852,9 @@ static int iec_104_fetch_internal(const char *address, const uint16_t port, cons
 #if defined STANDALONE
 
 void usage(const char *name, FILE *stream) {
-    fprintf(stream, "Usage: %s <host> <port> <socket_file> [<host> <port> <socket_file>]...\n", name);
-    fprintf(stream, "    You could use ncat  --listen --keep-open --unixsock /tmp/socket for debugging\n");
+    fprintf(stream, "Usage: %s <host> <port> <socket_file|reporting_port> [<host> <port> <socket_file|reporting_port>]...\n", name);
+    fprintf(stream, "    You could use ncat  --listen --keep-open --source-port 1234 for debugging tcp socket reporting\n");
+    fprintf(stream, "    You could use ncat  --listen --keep-open --unixsock /tmp/socket for debugging unix socket reporting\n");
     fprintf(stream, "        Don't forget to remove old socket file before restarting ncat or it will fail\n");
     fprintf(stream, "        ncat may be located in nmap or ncat (Debian/Ubuntu) package\n");
 }
@@ -823,8 +872,16 @@ int main(int argc, char **argv) {
         const char *host = strdup(argv[1]);
         const uint16_t port = (uint16_t) strtol(argv[2], NULL, 10);
         const char *domain_socket_name = strdup(argv[3]);
-        printf("Starting new thread to serve %s:%d with domain socket %s\n", host, port, domain_socket_name);
-        iec_104_fetch_internal(host, port, domain_socket_name);
+        char *endptr;
+        long int reporting_port = strtol(argv[3], &endptr, 10);
+        if (reporting_port > 0 && reporting_port < 65536 && *endptr == '\0') {
+            printf("Starting new thread to serve %s:%d with tcp reporting port %ld\n", host, port, reporting_port);
+        } else {
+            reporting_port = 0;
+            domain_socket_name = strdup(argv[3]);
+            printf("Starting new thread to serve %s:%d with domain socket %s\n", host, port, domain_socket_name);
+        }
+        iec_104_fetch_internal(host, port, domain_socket_name, (uint16_t) reporting_port);
         argc -= 3;
         argv += 3;
     }
@@ -836,13 +893,20 @@ int main(int argc, char **argv) {
 static int
 iec_104_fetch(struct lua_State *L) {
     if (lua_gettop(L) < 3) {
-        luaL_error(L, "Usage: fetch(host: string, port: number, domain_socket_name: string)");
+        luaL_error(L, "Usage: fetch(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number})");
     }
 
     const char *host = strdup(lua_tostring(L, 1));
     const uint16_t port = lua_tointeger(L, 2);
-    const char *domain_socket_name = strdup(lua_tostring(L, 3));
-    iec_104_fetch_internal(host, port, domain_socket_name);
+    const char *domain_socket_name = NULL;
+    uint16_t tcp_reporting_port = 0;
+    if (lua_isnumber(L, 3)) {
+        tcp_reporting_port = lua_tointeger(L, 3);
+    } else {
+        domain_socket_name = strdup(lua_tostring(L, 3));
+
+    }
+    iec_104_fetch_internal(host, port, domain_socket_name, tcp_reporting_port);
     return 0;
 }
 
