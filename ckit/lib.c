@@ -258,7 +258,7 @@ static struct json_object *master_object_create(struct context *context) {
     json_object_object_add(master_object, OBJECT_TIMESTAMP, json_object_new_int64(currentTimeMillis()));
     json_object_object_add(master_object, MEASUREMENTS, json_object_new_array());
     if (context->device_id) {
-        json_object_object_add(context->master_object, DEVICE_ID, json_object_new_string(context->device_id));
+        json_object_object_add(master_object, DEVICE_ID, json_object_new_string(context->device_id));
     }
     printf("%s:%i master object %p created\n", context->host, context->port, master_object);
     return master_object;
