@@ -81,8 +81,8 @@ static void send_data_to_domain_socket(struct context *context, const char *data
     const size_t max_socket_name_len = sizeof(addr.sun_path) - 1;
     const ssize_t data_len = strlen(data);
     if (strlen(context->domain_socket_name) > max_socket_name_len) {
-        fprintf(stderr, "ERROR: socket name \"%s\" is too long (max len = %ld)\n",
-                context->domain_socket_name, max_socket_name_len);
+        fprintf(stderr, "%s:%d ERROR: socket name \"%s\" is too long (max len = %ld)\n",
+                context->host, context->port, context->domain_socket_name, max_socket_name_len);
     }
     strncpy(addr.sun_path, context->domain_socket_name, max_socket_name_len);
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -106,7 +106,9 @@ static void send_data_to_domain_socket(struct context *context, const char *data
 static void send_data_to_tcp_socket(struct context *context, const char *data) {
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (fd < 0) {
-        perror("ERROR: Can't create socket for data reporting");
+        char error_message_buffer[80] = {};
+        strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
+        fprintf(stderr, "%s:%d ERROR: Can't create socket for data reporting (%s)\n", context->host, context->port, error_message_buffer);
         return;
     }
     struct sockaddr_in addr = {};
@@ -115,14 +117,14 @@ static void send_data_to_tcp_socket(struct context *context, const char *data) {
     addr.sin_port = htons(context->tcp_reporting_port);
     // Convert IPv4 and IPv6 addresses from text to binary form
     if ((he = gethostbyname(REPORTING_HOST)) == NULL) {  /* get the host info */
-        printf("ERROR: Failed to convert \"%s\" host name to address\n", REPORTING_HOST);
+        printf("%s:%d ERROR: Failed to convert \"%s\" host name to address\n", context->host, context->port, REPORTING_HOST);
         return;
     }
     addr.sin_addr = *((struct in_addr *) he->h_addr);
     if (connect(fd, (const struct sockaddr *) &addr, sizeof(struct sockaddr)) == -1) {
         char error_message_buffer[80] = {};
         strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
-        fprintf(stderr, "ERROR: Can't connect to reporting socket %s:%d (%s)\n", REPORTING_HOST,
+        fprintf(stderr, "%s:%d ERROR: Can't connect to reporting socket %s:%d (%s)\n", context->host, context->port, REPORTING_HOST,
                 context->tcp_reporting_port,
                 error_message_buffer);
         close(fd);
@@ -132,7 +134,7 @@ static void send_data_to_tcp_socket(struct context *context, const char *data) {
     if (write(fd, data, strlen(data)) != data_len) {
         char error_message_buffer[80] = {};
         strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
-        fprintf(stderr, "ERROR: Can't write to reporting socket %s:%d (%s)\n", REPORTING_HOST,
+        fprintf(stderr, "%s:%d ERROR: Can't write to reporting socket %s:%d (%s)\n", context->host, context->port, REPORTING_HOST,
                 context->tcp_reporting_port,
                 error_message_buffer);
         close(fd);
@@ -258,6 +260,7 @@ static struct json_object *master_object_create(struct context *context) {
     if (context->device_id) {
         json_object_object_add(context->master_object, DEVICE_ID, json_object_new_string(context->device_id));
     }
+    printf("%s:%i master object %p created\n", context->host, context->port, master_object);
     return master_object;
 }
 
@@ -542,17 +545,19 @@ connectionHandler(void *parameter, CS104_Connection connection, CS104_Connection
 static bool
 asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
     (void) address;
+    struct context *context = parameter;
     const int type = CS101_ASDU_getTypeID(asdu);
     const char *typeStr = TypeID_toString(type);
     const int cot = CS101_ASDU_getCOT(asdu);
-    printf("RECVD ASDU type: %s(%i) elements: %i cot %s(%i)\n",
+    printf("%s:%d RECVD ASDU type: %s(%i) elements: %i cot %s(%i)\n",
+           context->host,
+           context->port,
            typeStr,
            type,
            CS101_ASDU_getNumberOfElements(asdu),
            CS101_CauseOfTransmission_toString(cot),
            cot);
 
-    struct context *context = parameter;
     if (cot == CS101_COT_ACTIVATION_TERMINATION) {
         context->CONNECTION_CLOSING = true;
         //exit(EXIT_SUCCESS);
@@ -766,7 +771,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
 
 static void *iec_104_fetch_thread(void *arg) {
     struct context *context = arg;
-    printf("%s:%i Starging new thread\n", context->host, context->port);
+    printf("%s:%i Started new thread\n", context->host, context->port);
     if (CONTEXT_DEBUG) {
         context_dump(context);
     }
@@ -792,23 +797,23 @@ static void *iec_104_fetch_thread(void *arg) {
                 Thread_sleep(100);
                 time_current = time(NULL);
                 if (time_current - time_start > 15) {
-                    printf("Timed out receiving data\n");
+                    printf("%s:%d WARNING: Timed out receiving data\n", context->host, context->port);
                     break;
                 }
             }
-            printf("Sending StopDT\n");
+            printf("%s:%d Sending StopDT\n", context->host, context->port);
             CS104_Connection_sendStopDT(con);
             while (!context->CONNECTION_CLOSED) {
                 Thread_sleep(100);
                 time_current = time(NULL);
                 if (time_current - time_start > 15) {
-                    printf("Timed out closing the connection\n");
+                    printf("%s:%d Timed out closing the connection\n", context->host, context->port);
                     break;
                 }
             }
-            printf("Destroying the connection\n");
+            printf("%s:%d Destroying the connection\n", context->host, context->port);
             CS104_Connection_destroy(con);
-            printf("Destroyed the connection\n");
+            printf("%s:%d Destroyed the connection\n", context->host, context->port);
         }
         printf("%s:%i Reporting data\n", context->host, context->port);
         const char *json_string = json_object_get_string(context->master_object);
@@ -887,11 +892,11 @@ int main(int argc, char **argv) {
         char *endptr;
         long int reporting_port = strtol(argv[3], &endptr, 10);
         if (reporting_port > 0 && reporting_port < 65536 && *endptr == '\0') {
-            printf("Starting new thread to serve %s:%d with tcp reporting port %ld\n", host, port, reporting_port);
+            printf("%s:%d Starting new thread with tcp reporting port %ld\n", host, port, reporting_port);
         } else {
             reporting_port = 0;
             domain_socket_name = strdup(argv[3]);
-            printf("Starting new thread to serve %s:%d with domain socket %s\n", host, port, domain_socket_name);
+            printf("%s:%d Starting new thread with domain socket \"%s\"\n", host, port, domain_socket_name);
         }
         iec_104_fetch_internal(host, port, domain_socket_name, (uint16_t) reporting_port);
         argc -= 3;
