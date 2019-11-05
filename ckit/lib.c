@@ -912,14 +912,24 @@ int main(int argc, char **argv) {
 
 #else
 
+static void iec_104_usage(struct lua_State *L) {
+    luaL_error(L, "Usage: fetch(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number})");
+}
+
 static int
 iec_104_fetch(struct lua_State *L) {
     if (lua_gettop(L) < 3) {
-        luaL_error(L, "Usage: fetch(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number})");
+        iec_104_usage(L);
+        return 0;
     }
 
     printf("%s: Trying to get meter's host from LUA\n", __func__);
-    const char *host = strdup(lua_tostring(L, 1));
+    const char *lua_host = lua_tostring(L, 1);
+    if (lua_host == NULL) {
+        iec_104_usage(L);
+        return 0;
+    }
+    const char *host = strdup(lua_host);
     printf("%s: Got meter's host \"%s\" from LUA\n", __func__, host);
     printf("%s: Trying to get meter's TCP port from LUA\n", __func__);
     const uint16_t port = lua_tointeger(L, 2);
@@ -932,7 +942,12 @@ iec_104_fetch(struct lua_State *L) {
         printf("%s:%d Got reporting TCP port %d\n", host, port, tcp_reporting_port);
     } else {
         printf("%s:%d Trying to get reporting domain socket name from LUA\n", host, port);
-        domain_socket_name = strdup(lua_tostring(L, 3));
+        const char *lua_name = lua_tostring(L, 3);
+        if (lua_name == NULL) {
+            iec_104_usage(L);
+            return 0;
+        }
+        domain_socket_name = strdup(lua_name);
         printf("%s:%d Got reporting domain socket name \"%s\"\n", host, port, domain_socket_name);
     }
     printf("%s:%d Starting meter's poll thread\n", host, port);
