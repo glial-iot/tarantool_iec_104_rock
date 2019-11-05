@@ -950,7 +950,7 @@ iec_104_fetch(struct lua_State *L) {
         domain_socket_name = strdup(lua_name);
         printf("%s:%d Got reporting domain socket name \"%s\"\n", host, port, domain_socket_name);
     }
-    printf("%s:%d Starting meter's poll thread\n", host, port);
+    printf("%s:%d Starting meter's poll thread (domain socket %s/tcp port %d)\n", host, port, domain_socket_name, tcp_reporting_port);
     iec_104_fetch_internal(host, port, domain_socket_name, tcp_reporting_port);
     return 0;
 }
