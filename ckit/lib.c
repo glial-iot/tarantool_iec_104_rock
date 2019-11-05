@@ -918,16 +918,24 @@ iec_104_fetch(struct lua_State *L) {
         luaL_error(L, "Usage: fetch(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number})");
     }
 
+    printf("%s: Trying to get meter's host from LUA\n", __func__);
     const char *host = strdup(lua_tostring(L, 1));
+    printf("%s: Got meter's host \"%s\" from LUA\n", __func__, host);
+    printf("%s: Trying to get meter's TCP port from LUA\n", __func__);
     const uint16_t port = lua_tointeger(L, 2);
+    printf("%s: Got meter's TCP port %d\n", __func__, port);
     const char *domain_socket_name = NULL;
     uint16_t tcp_reporting_port = 0;
     if (lua_isnumber(L, 3)) {
+        printf("%s:%d Trying to get reporting TCP port from LUA\n", host, port);
         tcp_reporting_port = lua_tointeger(L, 3);
+        printf("%s:%d Got reporting TCP port %d\n", host, port, tcp_reporting_port);
     } else {
+        printf("%s:%d Trying to get reporting domain socket name from LUA\n", host, port);
         domain_socket_name = strdup(lua_tostring(L, 3));
-
+        printf("%s:%d Got reporting domain socket name \"%s\"\n", host, port, domain_socket_name);
     }
+    printf("%s:%d Starting meter's poll thread\n", host, port);
     iec_104_fetch_internal(host, port, domain_socket_name, tcp_reporting_port);
     return 0;
 }
