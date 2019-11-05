@@ -250,6 +250,7 @@ static int64_t currentTimeMillis() {
 
 static struct json_object *master_object_create(struct context *context) {
     json_object *master_object = json_object_new_object();
+    printf("%s:%i Creating master object %p\n", context->host, context->port, master_object);
     if (CONTEXT_DEBUG) {
         context_dump(context);
     }
@@ -258,9 +259,13 @@ static struct json_object *master_object_create(struct context *context) {
     json_object_object_add(master_object, OBJECT_TIMESTAMP, json_object_new_int64(currentTimeMillis()));
     json_object_object_add(master_object, MEASUREMENTS, json_object_new_array());
     if (context->device_id) {
+        printf("%s:%i master object %p - setting device id %s\n", context->host, context->port, master_object, context->device_id);
         json_object_object_add(master_object, DEVICE_ID, json_object_new_string(context->device_id));
     }
     printf("%s:%i master object %p created\n", context->host, context->port, master_object);
+    if (CONTEXT_DEBUG) {
+        context_dump(context);
+    }
     return master_object;
 }
 
