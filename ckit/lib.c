@@ -780,47 +780,59 @@ static void *iec_104_fetch_thread(void *arg) {
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
 
-    bool connected = CS104_Connection_connect(con);
-    printf(connected ? "%s:%i Connected\n" : "%s:%i NOT conneted\n", context->host, context->port);
-    if (connected) {
-        long int time_start;
-        long int time_current;
-        time_start = time(NULL);
-        while (!context->CONNECTION_CLOSING) {
-            Thread_sleep(100);
-            time_current = time(NULL);
-            if (time_current - time_start > 15) {
-                printf("Timed out receiving data\n");
-                break;
+    bool connected = false;
+    while (true) {
+        connected = CS104_Connection_connect(con);
+        printf(connected ? "%s:%i Connected\n" : "%s:%i NOT conneted\n", context->host, context->port);
+        if (connected) {
+            long int time_start;
+            long int time_current;
+            time_start = time(NULL);
+            while (!context->CONNECTION_CLOSING) {
+                Thread_sleep(100);
+                time_current = time(NULL);
+                if (time_current - time_start > 15) {
+                    printf("Timed out receiving data\n");
+                    break;
+                }
             }
-        }
-        printf("Sending StopDT\n");
-        CS104_Connection_sendStopDT(con);
-        while (!context->CONNECTION_CLOSED) {
-            Thread_sleep(100);
-            time_current = time(NULL);
-            if (time_current - time_start > 15) {
-                printf("Timed out closing the connection\n");
-                break;
+            printf("Sending StopDT\n");
+            CS104_Connection_sendStopDT(con);
+            while (!context->CONNECTION_CLOSED) {
+                Thread_sleep(100);
+                time_current = time(NULL);
+                if (time_current - time_start > 15) {
+                    printf("Timed out closing the connection\n");
+                    break;
+                }
             }
+            printf("Destroying the connection\n");
+            CS104_Connection_destroy(con);
+            printf("Destroyed the connection\n");
         }
-        printf("Destroying the connection\n");
-        CS104_Connection_destroy(con);
-        printf("Destroyed the connection\n");
-    } else {
-        printf("%s:%i Sleeping %d seconds before reconnect\n", context->host, context->port, RECONNECT_TIMEOUT);
-        Thread_sleep(RECONNECT_TIMEOUT * 1000);
-        printf("%s:%i Sleeping %d seconds before reconnect done, reconnecting\n",
-                context->host, context->port, RECONNECT_TIMEOUT);
-    }
+        printf("%s:%i Reporting data\n", context->host, context->port);
+        const char *json_string = json_object_get_string(context->master_object);
+        if (context->tcp_reporting_port != 0) {
+            send_data_to_tcp_socket(context, json_string);
+        } else {
+            send_data_to_domain_socket(context, json_string);
+        }
+        if (json_object_put(context->master_object)) {
+            printf("%s:%i master object %p destroyed\n", context->host, context->port, context->master_object);
+        } else {
+            printf("%s:%i master object %p NOT destroyed (!)\n", context->host, context->port, context->master_object);
+        }
 
-    const char *json_string = json_object_get_string(context->master_object);
-    if (context->tcp_reporting_port != 0) {
-        send_data_to_tcp_socket(context, json_string);
-    } else {
-        send_data_to_domain_socket(context, json_string);
+        if (connected) {
+            break;
+        } else {
+            printf("%s:%i Sleeping %d seconds before reconnect\n", context->host, context->port, RECONNECT_TIMEOUT);
+            Thread_sleep(RECONNECT_TIMEOUT * 1000);
+            printf("%s:%i Sleeped %d seconds, reconnecting\n", context->host, context->port, RECONNECT_TIMEOUT);
+            context->master_object = master_object_create(
+                    context); // Recreate master object now, because old one was destroyed
+        }
     }
-    json_object_put(context->master_object);
     printf("%s:%d Thread finished\n", context->host, context->port);
     context_destroy(context);
     return NULL;
