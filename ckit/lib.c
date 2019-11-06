@@ -82,26 +82,36 @@ static void send_data_to_domain_socket(const struct context *context, const char
     const size_t max_socket_name_len = sizeof(addr.sun_path) - 1;
     const ssize_t data_len = strlen(data);
     if (strlen(context->domain_socket_name) > max_socket_name_len) {
-        fprintf(stderr, "%s:%d ERROR: socket name \"%s\" is too long (max len = %ld)\n",
+        fprintf(stderr, "%s:%d WARNING: socket name \"%s\" is too long (max len = %ld) - truncating\n",
                 context->host, context->port, context->domain_socket_name, max_socket_name_len);
     }
     strncpy(addr.sun_path, context->domain_socket_name, max_socket_name_len);
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
-        perror("ERROR: Can't create socket for LUA connection");
+        char error_message_buffer[80] = {};
+        strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
+        fprintf(stderr, "%s:%d ERROR: Can't create data reporting socket \"%s\" (%s)\n", context->host, context->port,
+                context->domain_socket_name, error_message_buffer);
         return;
     }
     if (connect(fd, (const struct sockaddr *) &addr, sizeof(addr)) == -1) {
-        perror("ERROR: Can't connect to LUA socket");
+        char error_message_buffer[80] = {};
+        strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
+        fprintf(stderr, "%s:%d ERROR: Can't connect to reporting socket \"%s\" (%s)\n", context->host, context->port,
+                addr.sun_path, error_message_buffer);
         close(fd);
         return;
     }
     if (write(fd, data, strlen(data)) != data_len) {
-        perror("ERROR: Can't write to LUA socket");
+        char error_message_buffer[80] = {};
+        strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
+        fprintf(stderr, "%s:%d ERROR: Can't connect to reporting socket \"%s\" (%s)\n", context->host, context->port,
+                addr.sun_path, error_message_buffer);
         close(fd);
-        return;
+        return false;
     }
     close(fd);
+    return true;
 }
 
 static void send_data_to_tcp_socket(const struct context *context, const char *data) {
@@ -109,7 +119,8 @@ static void send_data_to_tcp_socket(const struct context *context, const char *d
     if (fd < 0) {
         char error_message_buffer[80] = {};
         strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
-        fprintf(stderr, "%s:%d ERROR: Can't create socket for data reporting (%s)\n", context->host, context->port, error_message_buffer);
+        fprintf(stderr, "%s:%d ERROR: Can't create data reporting socket %s:%d (%s)\n", context->host, context->port,
+                REPORTING_HOST, context->tcp_reporting_port, error_message_buffer);
         return;
     }
     struct sockaddr_in addr = {};
