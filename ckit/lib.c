@@ -76,6 +76,14 @@ static void context_dump(struct context *context) {
     fflush(stdout);
 }
 
+static int64_t currentTimeMillis() {
+    struct timeval time;
+    gettimeofday(&time, NULL);
+    int64_t s1 = (int64_t) (time.tv_sec) * 1000;
+    int64_t s2 = (time.tv_usec / 1000);
+    return s1 + s2;
+}
+
 static bool send_data_to_domain_socket(const struct context *context, const char *data) {
     struct sockaddr_un addr = {};
     addr.sun_family = AF_UNIX;
@@ -270,14 +278,6 @@ F_FA_NA_1	ACK file, ACK section
 F_SG_NA_1	Segment
 F_DR_TA_1	Directory
  */
-
-static int64_t currentTimeMillis() {
-    struct timeval time;
-    gettimeofday(&time, NULL);
-    int64_t s1 = (int64_t) (time.tv_sec) * 1000;
-    int64_t s2 = (time.tv_usec / 1000);
-    return s1 + s2;
-}
 
 static struct json_object *master_object_create(struct context *context) {
     json_object *master_object = json_object_new_object();
