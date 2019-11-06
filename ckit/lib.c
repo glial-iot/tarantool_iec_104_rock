@@ -76,7 +76,7 @@ static void context_dump(struct context *context) {
     fflush(stdout);
 }
 
-static void send_data_to_domain_socket(const struct context *context, const char *data) {
+static bool send_data_to_domain_socket(const struct context *context, const char *data) {
     struct sockaddr_un addr = {};
     addr.sun_family = AF_UNIX;
     const size_t max_socket_name_len = sizeof(addr.sun_path) - 1;
@@ -92,7 +92,7 @@ static void send_data_to_domain_socket(const struct context *context, const char
         strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
         fprintf(stderr, "%s:%d ERROR: Can't create data reporting socket \"%s\" (%s)\n", context->host, context->port,
                 context->domain_socket_name, error_message_buffer);
-        return;
+        return false;
     }
     if (connect(fd, (const struct sockaddr *) &addr, sizeof(addr)) == -1) {
         char error_message_buffer[80] = {};
@@ -100,7 +100,7 @@ static void send_data_to_domain_socket(const struct context *context, const char
         fprintf(stderr, "%s:%d ERROR: Can't connect to reporting socket \"%s\" (%s)\n", context->host, context->port,
                 addr.sun_path, error_message_buffer);
         close(fd);
-        return;
+        return false;
     }
     if (write(fd, data, strlen(data)) != data_len) {
         char error_message_buffer[80] = {};
@@ -114,14 +114,14 @@ static void send_data_to_domain_socket(const struct context *context, const char
     return true;
 }
 
-static void send_data_to_tcp_socket(const struct context *context, const char *data) {
+static bool send_data_to_tcp_socket(const struct context *context, const char *data) {
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (fd < 0) {
         char error_message_buffer[80] = {};
         strerror_r(errno, error_message_buffer, sizeof(error_message_buffer));
         fprintf(stderr, "%s:%d ERROR: Can't create data reporting socket %s:%d (%s)\n", context->host, context->port,
                 REPORTING_HOST, context->tcp_reporting_port, error_message_buffer);
-        return;
+        return false;
     }
     struct sockaddr_in addr = {};
     struct hostent *he;
@@ -130,7 +130,7 @@ static void send_data_to_tcp_socket(const struct context *context, const char *d
     // Convert IPv4 and IPv6 addresses from text to binary form
     if ((he = gethostbyname(REPORTING_HOST)) == NULL) {  /* get the host info */
         printf("%s:%d ERROR: Failed to convert \"%s\" host name to address\n", context->host, context->port, REPORTING_HOST);
-        return;
+        return false;
     }
     addr.sin_addr = *((struct in_addr *) he->h_addr);
     if (connect(fd, (const struct sockaddr *) &addr, sizeof(struct sockaddr)) == -1) {
@@ -140,7 +140,7 @@ static void send_data_to_tcp_socket(const struct context *context, const char *d
                 context->tcp_reporting_port,
                 error_message_buffer);
         close(fd);
-        return;
+        return false;
     }
     const ssize_t data_len = strlen(data);
     if (write(fd, data, strlen(data)) != data_len) {
@@ -150,9 +150,10 @@ static void send_data_to_tcp_socket(const struct context *context, const char *d
                 context->tcp_reporting_port,
                 error_message_buffer);
         close(fd);
-        return;
+        return false;
     }
     close(fd);
+    return true;
 }
 
 void report_measurements(const struct context *context) {
