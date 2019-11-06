@@ -167,7 +167,10 @@ static char *QualityToString(QualityDescriptor quality) {
              (quality & IEC60870_QUALITY_INVALID ? "INVALID|" : "")
     );
     buf[79] = '\0';
-    buf[strlen(buf)] = '\0';
+    size_t trailing_symbol_pos = strlen(buf) - 1;
+    if (buf[trailing_symbol_pos] == '|') {
+        buf[trailing_symbol_pos] = '\0'; // Remove trailing | symbol (if any)
+    }
     return strdup(buf);
 }
 
