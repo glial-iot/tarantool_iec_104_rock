@@ -165,7 +165,7 @@ static bool send_data_to_tcp_socket(const struct context *context, const char *d
     return true;
 }
 
-void report_measurements(const struct context *context) {
+void report_measurements(struct context *context) {
     printf("%s:%i Reporting data\n", context->host, context->port);
     const char *json_string = json_object_get_string(context->master_object);
     bool reported;
@@ -188,7 +188,8 @@ void report_measurements(const struct context *context) {
                retries);
     }
     if (json_object_put(context->master_object)) {
-        printf("%s:%i master object %p destroyed\n", context->host, context->port, context->master_object);
+        printf("%s:%i master object %p was destroyed\n", context->host, context->port, context->master_object);
+        context->master_object = NULL;
     } else {
         printf("%s:%i WARNING: master object %p NOT destroyed\n", context->host, context->port, context->master_object);
     }
@@ -316,7 +317,9 @@ static struct json_object *master_object_create(struct context *context) {
 }
 
 static void put_measurement(struct context *context, struct json_object *measurement) {
-    struct json_object *master_object = context->master_object;
+    if (context->master_object == NULL) {
+        context->master_object = master_object_create(context);
+    }
     struct json_object *ioa;
     json_object_object_get_ex(measurement, OBJECT_ADDRESS, &ioa);
     int ioa_int = json_object_get_int(ioa);
@@ -325,7 +328,7 @@ static void put_measurement(struct context *context, struct json_object *measure
     json_object_object_add(measurement, OBJECT_DESCRIPTION, desc);
 
     struct json_object *measurements_array;
-    json_object_object_get_ex(master_object, MEASUREMENTS, &measurements_array);
+    json_object_object_get_ex(context->master_object, MEASUREMENTS, &measurements_array);
 
     int replaced = 0;
     for (int i = 0; i < json_object_array_length(measurements_array); i++) {
@@ -833,7 +836,6 @@ static void *iec_104_fetch_thread(void *arg) {
 
     //printf("Connecting to: %s:%i\n", context->host, context->port);
     CS104_Connection con = CS104_Connection_create(context->host, context->port);
-    context->master_object = master_object_create(context);
     CS104_Connection_setConnectionHandler(con, connectionHandler, context);
     CS104_Connection_setASDUReceivedHandler(con, asduReceivedHandler, context);
 
@@ -877,8 +879,6 @@ static void *iec_104_fetch_thread(void *arg) {
             printf("%s:%i Sleeping %d seconds before reconnect\n", context->host, context->port, RECONNECT_TIMEOUT);
             Thread_sleep(RECONNECT_TIMEOUT * 1000);
             printf("%s:%i Sleeped %d seconds, reconnecting\n", context->host, context->port, RECONNECT_TIMEOUT);
-            context->master_object = master_object_create(
-                    context); // Recreate master object now, because old one was destroyed
         }
     }
     printf("%s:%d Thread finished\n", context->host, context->port);
