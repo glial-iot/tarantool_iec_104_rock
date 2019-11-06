@@ -40,6 +40,7 @@
 #define MEASUREMENTS "measurements"
 #define RECONNECT_TIMEOUT (10) // 10 seconds
 #define REPORTING_HOST "127.0.0.1"
+#define REPORTING_RETRIES_MAX 10
 
 struct context {
     const char *host;
@@ -167,10 +168,24 @@ static bool send_data_to_tcp_socket(const struct context *context, const char *d
 void report_measurements(const struct context *context) {
     printf("%s:%i Reporting data\n", context->host, context->port);
     const char *json_string = json_object_get_string(context->master_object);
-    if (context->tcp_reporting_port != 0) {
-        send_data_to_tcp_socket(context, json_string);
-    } else {
-        send_data_to_domain_socket(context, json_string);
+    bool reported;
+    int retries = 0;
+    do {
+        retries++;
+        if (context->tcp_reporting_port != 0) {
+            reported = send_data_to_tcp_socket(context, json_string);
+        } else {
+            reported = send_data_to_domain_socket(context, json_string);
+        }
+        if (!reported) {
+            unsigned int seed = currentTimeMillis() % 1000;
+            printf("%s:%i WARNING: Data reporting failed (%d)\n", context->host, context->port, retries);
+            Thread_sleep(rand_r(&seed)); // Sleep random time in range [0..999] ms between retries to avoid deadlocks
+        }
+    } while (!reported && retries != REPORTING_RETRIES_MAX);
+    if (!reported) {
+        printf("%s:%i ERROR: Data reporting failed after %d retries - bailing\n", context->host, context->port,
+               retries);
     }
     if (json_object_put(context->master_object)) {
         printf("%s:%i master object %p destroyed\n", context->host, context->port, context->master_object);
