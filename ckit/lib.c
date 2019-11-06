@@ -48,6 +48,7 @@ struct context {
     u_int16_t tcp_reporting_port;
     bool CONNECTION_CLOSING;
     bool CONNECTION_CLOSED;
+    bool INTERROGATION_FINISHED;
     struct json_object *master_object;
     char *device_id;
 };
@@ -75,7 +76,7 @@ static void context_dump(struct context *context) {
     fflush(stdout);
 }
 
-static void send_data_to_domain_socket(struct context *context, const char *data) {
+static void send_data_to_domain_socket(const struct context *context, const char *data) {
     struct sockaddr_un addr = {};
     addr.sun_family = AF_UNIX;
     const size_t max_socket_name_len = sizeof(addr.sun_path) - 1;
@@ -103,7 +104,7 @@ static void send_data_to_domain_socket(struct context *context, const char *data
     close(fd);
 }
 
-static void send_data_to_tcp_socket(struct context *context, const char *data) {
+static void send_data_to_tcp_socket(const struct context *context, const char *data) {
     int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (fd < 0) {
         char error_message_buffer[80] = {};
@@ -141,6 +142,21 @@ static void send_data_to_tcp_socket(struct context *context, const char *data) {
         return;
     }
     close(fd);
+}
+
+void report_measurements(const struct context *context) {
+    printf("%s:%i Reporting data\n", context->host, context->port);
+    const char *json_string = json_object_get_string(context->master_object);
+    if (context->tcp_reporting_port != 0) {
+        send_data_to_tcp_socket(context, json_string);
+    } else {
+        send_data_to_domain_socket(context, json_string);
+    }
+    if (json_object_put(context->master_object)) {
+        printf("%s:%i master object %p destroyed\n", context->host, context->port, context->master_object);
+    } else {
+        printf("%s:%i WARNING: master object %p NOT destroyed\n", context->host, context->port, context->master_object);
+    }
 }
 
 char *ioa_to_string(int ioa) {
@@ -568,6 +584,7 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
 
     if (cot == CS101_COT_ACTIVATION_TERMINATION) {
         context->CONNECTION_CLOSING = true;
+        context->INTERROGATION_FINISHED = true;
         //exit(EXIT_SUCCESS);
     }
 
@@ -774,6 +791,9 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
             fprintf(stderr, "Got not implemented yet ASDU type %s(%d)\n", typeStr, type);
             //exit(1);
     }
+    if (context->INTERROGATION_FINISHED) {
+        report_measurements(context);
+    }
     return true;
 }
 
@@ -822,18 +842,6 @@ static void *iec_104_fetch_thread(void *arg) {
             printf("%s:%d Destroying the connection\n", context->host, context->port);
             CS104_Connection_destroy(con);
             printf("%s:%d Destroyed the connection\n", context->host, context->port);
-        }
-        printf("%s:%i Reporting data\n", context->host, context->port);
-        const char *json_string = json_object_get_string(context->master_object);
-        if (context->tcp_reporting_port != 0) {
-            send_data_to_tcp_socket(context, json_string);
-        } else {
-            send_data_to_domain_socket(context, json_string);
-        }
-        if (json_object_put(context->master_object)) {
-            printf("%s:%i master object %p destroyed\n", context->host, context->port, context->master_object);
-        } else {
-            printf("%s:%i master object %p NOT destroyed (!)\n", context->host, context->port, context->master_object);
         }
 
         if (connected) {
