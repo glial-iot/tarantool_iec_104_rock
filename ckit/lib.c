@@ -49,6 +49,7 @@ struct context {
     u_int16_t port;
     const char *domain_socket_name;
     u_int16_t tcp_reporting_port;
+    bool LIVE_MODE;
     bool CONNECTION_CLOSING;
     bool CONNECTION_CLOSED;
     bool INTERROGATION_FINISHED;
@@ -615,7 +616,9 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
            cot);
 
     if (cot == CS101_COT_ACTIVATION_TERMINATION) {
-        context->CONNECTION_CLOSING = true;
+        if (!context->LIVE_MODE) {
+            context->CONNECTION_CLOSING = true;
+        }
         context->INTERROGATION_FINISHED = true;
         //exit(EXIT_SUCCESS);
     }
@@ -889,7 +892,7 @@ static void *iec_104_fetch_thread(void *arg) {
 }
 
 static int iec_104_fetch_internal(const char *address, const uint16_t port, const char *domain_socket_name,
-                                  const uint16_t reporting_port) {
+                                  const uint16_t reporting_port, bool live_mode) {
     struct context *context = calloc(1, sizeof(struct context));
     if (context == NULL) {
         perror("ERROR: unable to allocate memory for context");
@@ -900,6 +903,7 @@ static int iec_104_fetch_internal(const char *address, const uint16_t port, cons
     context->port = port;
     context->domain_socket_name = domain_socket_name;
     context->tcp_reporting_port = reporting_port;
+    context->LIVE_MODE = live_mode;
 
     Thread thread = Thread_create(&iec_104_fetch_thread, context, true);
     if (thread != NULL) {
@@ -914,7 +918,7 @@ static int iec_104_fetch_internal(const char *address, const uint16_t port, cons
 #if defined STANDALONE
 
 void usage(const char *name, FILE *stream) {
-    fprintf(stream, "Usage: %s <host> <port> <socket_file|reporting_port> [<host> <port> <socket_file|reporting_port>]...\n", name);
+    fprintf(stream, "Usage: %s <host> <port> <socket_file|reporting_port> <live|once> [<host> <port> <socket_file|reporting_port> <live|once>]...\n", name);
     fprintf(stream, "    You could use ncat  --listen --keep-open --source-port 1234 for debugging tcp socket reporting\n");
     fprintf(stream, "    You could use ncat  --listen --keep-open --unixsock /tmp/socket for debugging unix socket reporting\n");
     fprintf(stream, "        Don't forget to remove old socket file before restarting ncat or it will fail\n");
@@ -926,26 +930,29 @@ int main(int argc, char **argv) {
         usage(argv[0], stdout);
         exit(EXIT_SUCCESS);
     }
-    if (argc < 4) {
+    if (argc < 5) {
         usage(argv[0], stderr);
         exit(EXIT_FAILURE);
     }
-    while (argc >= 4) {
+    while (argc >= 5) {
         const char *host = strdup(argv[1]);
         const uint16_t port = (uint16_t) strtol(argv[2], NULL, 10);
         const char *domain_socket_name = strdup(argv[3]);
         char *endptr;
         long int reporting_port = strtol(argv[3], &endptr, 10);
+        bool live_mode = !strcmp(argv[4], "live");
         if (reporting_port > 0 && reporting_port < 65536 && *endptr == '\0') {
-            printf("%s:%d Starting new thread with tcp reporting port %ld\n", host, port, reporting_port);
+            printf("%s:%d Starting new thread with tcp reporting port %ld in %s mode\n", host, port, reporting_port,
+                   live_mode ? "live" : "once");
         } else {
             reporting_port = 0;
             domain_socket_name = strdup(argv[3]);
-            printf("%s:%d Starting new thread with domain socket \"%s\"\n", host, port, domain_socket_name);
+            printf("%s:%d Starting new thread with domain socket \"%s\" in %s mode\n", host, port, domain_socket_name,
+                   live_mode ? "live" : "once");
         }
-        iec_104_fetch_internal(host, port, domain_socket_name, (uint16_t) reporting_port);
-        argc -= 3;
-        argv += 3;
+        iec_104_fetch_internal(host, port, domain_socket_name, (uint16_t) reporting_port, live_mode);
+        argc -= 4;
+        argv += 4;
     }
     Thread_sleep(128 * 1000); // Run background threads for 128 seconds
 }
@@ -953,12 +960,12 @@ int main(int argc, char **argv) {
 #else
 
 static void iec_104_usage(struct lua_State *L) {
-    luaL_error(L, "Usage: fetch(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number})");
+    luaL_error(L, "Usage: fetch(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number}, live_mode: bool)");
 }
 
 static int
 iec_104_fetch(struct lua_State *L) {
-    if (lua_gettop(L) < 3) {
+    if (lua_gettop(L) < 4) {
         iec_104_usage(L);
         return 0;
     }
@@ -990,8 +997,9 @@ iec_104_fetch(struct lua_State *L) {
         domain_socket_name = strdup(lua_name);
         printf("%s:%d Got reporting domain socket name \"%s\"\n", host, port, domain_socket_name);
     }
-    printf("%s:%d Starting meter's poll thread (domain socket %s/tcp port %d)\n", host, port, domain_socket_name, tcp_reporting_port);
-    iec_104_fetch_internal(host, port, domain_socket_name, tcp_reporting_port);
+    bool live_mode = lua_toboolean(L, 4);
+    printf("%s:%d Starting meter's poll thread (domain socket %s/tcp port %d) in %s mode\n", host, port, domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
+    iec_104_fetch_internal(host, port, domain_socket_name, tcp_reporting_port, live_mode);
     return 0;
 }
 
