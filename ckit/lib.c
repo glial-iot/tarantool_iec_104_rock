@@ -1,9 +1,11 @@
 /* Example of a C submodule for Tarantool */
+#ifndef STANDALONE
 #include <tarantool/module.h>
 
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
+#endif
 
 #include "cs104_connection.h"
 #include "hal_time.h"
@@ -17,9 +19,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <errno.h>
 #include "ioa_descriptions.h"
 
 #define CONTEXT_DEBUG false
