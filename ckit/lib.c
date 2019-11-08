@@ -191,8 +191,8 @@ static bool send_data_to_tcp_socket(const struct context *context, const char *d
 }
 
 void report_measurements(struct context *context) {
-    printf("%s:%i Reporting data\n", context->host, context->port);
     const char *json_string = json_object_get_string(context->master_object);
+    printf("%s:%i Reporting data: %s\n", context->host, context->port, json_string);
     bool reported;
     int retries = 0;
     do {
