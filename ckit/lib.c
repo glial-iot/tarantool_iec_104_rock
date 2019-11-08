@@ -914,6 +914,7 @@ static void *iec_104_fetch_thread(void *arg) {
     if (context->LIVE_MODE) {
         printf("%s:%i Connection in live mode was unexpectedly closed - reporting this\n", context->host,
                context->port);
+        json_object_put(context->master_object);
         context->master_object = master_object_create(context);
         report_measurements(context);
     }
