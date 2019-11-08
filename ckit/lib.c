@@ -878,7 +878,7 @@ static void *iec_104_fetch_thread(void *arg) {
             long int time_start;
             long int time_current;
             time_start = time(NULL);
-            while (!context->CONNECTION_CLOSING) {
+            while (!context->CONNECTION_CLOSING && !context->CONNECTION_CLOSED) {
                 Thread_sleep(100);
                 time_current = time(NULL);
                 if (time_current - time_start > 15 && !context->LIVE_MODE) {
