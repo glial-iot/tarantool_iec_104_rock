@@ -858,6 +858,9 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
     return true;
 }
 
+ssize_t meter_record_find(struct context *context);
+bool meter_record_destroy(ssize_t slot_id);
+
 static void *iec_104_fetch_thread(void *arg) {
     struct context *context = arg;
     printf("%s:%i Started new thread\n", context->host, context->port);
@@ -920,6 +923,11 @@ static void *iec_104_fetch_thread(void *arg) {
         report_measurements(context);
     }
     printf("%s:%d Thread finished\n", context->host, context->port);
+    ssize_t slot_id = meter_record_find(context);
+    if (slot_id >= 0) {
+        printf("%s:%d Removing meter record in slot %zd\n", context->host, context->port, slot_id);
+        meter_record_destroy(slot_id);
+    }
     context_destroy(context);
     return NULL;
 }
