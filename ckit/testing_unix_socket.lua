@@ -9,8 +9,8 @@ os.remove(SOCKET_FILE)
 assert(socket:bind(SOCKET_FILE))
 assert(socket:listen())
 
-iec_104.fetch("meter1.example.com", 2404, SOCKET_FILE, true);
-iec_104.fetch("meter2.example.com", 2404, SOCKET_FILE, false);
+iec_104.meter_add("meter1.example.com", 2404, SOCKET_FILE, true);
+iec_104.meter_add("meter2.example.com", 2404, SOCKET_FILE, false);
 while true do
     conn = assert(socket:accept())
     data = conn:receive("*a") -- receive all data from socket, until connection is closed

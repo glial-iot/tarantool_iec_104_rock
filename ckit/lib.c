@@ -10,6 +10,7 @@
 #include "cs104_connection.h"
 #include "hal_time.h"
 #include "hal_thread.h"
+#include "lib60870_config.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <json-c/json.h>
@@ -46,6 +47,10 @@
 #define REPORTING_HOST "127.0.0.1"
 #define REPORTING_RETRIES_MAX 10
 
+#ifndef CONFIG_USE_SEMAPHORES
+    #error "CONFIG_USE_SEMAPHORES should be enabled, please enable it and try again"
+#endif
+
 struct context {
     const char *host;
     u_int16_t port;
@@ -58,6 +63,20 @@ struct context {
     struct json_object *master_object;
     char *device_id;
 };
+
+struct meter_record {
+    Thread thread;
+    char *host;
+    u_int16_t port;
+    char *domain_socket_name;
+    u_int16_t tcp_reporting_port;
+    bool live_mode;
+};
+
+struct meter_record **meters = NULL;
+ssize_t meters_slots_count = 0;
+Semaphore meters_semaphore = NULL;
+
 
 static void context_destroy(struct context *context) {
     free((char *) context->host);
@@ -901,28 +920,217 @@ static void *iec_104_fetch_thread(void *arg) {
     return NULL;
 }
 
-static int iec_104_fetch_internal(const char *address, const uint16_t port, const char *domain_socket_name,
-                                  const uint16_t reporting_port, bool live_mode) {
+// Returns index of meter record which match given parameters, or -1 if no such record was found
+// Must be called with meters_semaphore hold!
+ssize_t meter_record_find_unlocked(struct context *context) {
+    ssize_t result = -1;
+    if (meters == NULL) {
+        return -1;
+    }
+    for (ssize_t i = 0; i < meters_slots_count; i++) {
+        struct meter_record *current_meter_record = meters[i];
+        if (current_meter_record == NULL) {
+            continue;
+        }
+        bool domain_socket_name_match = false;
+        if (current_meter_record->domain_socket_name == NULL && context->domain_socket_name == NULL) {
+            domain_socket_name_match = true;
+        } else if (current_meter_record->domain_socket_name && context->domain_socket_name) {
+            domain_socket_name_match = !strcmp(current_meter_record->domain_socket_name, context->domain_socket_name);
+        }
+        bool match = !strcmp(current_meter_record->host, context->host)
+                     && current_meter_record->port == context->port
+                     && domain_socket_name_match
+                     && current_meter_record->tcp_reporting_port == context->tcp_reporting_port
+                     && current_meter_record->live_mode == context->LIVE_MODE;
+        if (match) {
+            result = i;
+            break;
+        }
+    }
+    return result;
+}
+
+// Returns index of meter record which match given parameters, or -1 if no such record was found
+ssize_t meter_record_find(struct context *context) {
+    Semaphore_wait(meters_semaphore);
+    ssize_t result = meter_record_find_unlocked(context);
+    Semaphore_post(meters_semaphore);
+    return result;
+}
+
+// Returns index of first free (NULL) meter record, or -1 if no such record was found
+// Must be called with meters_semaphore hold!
+ssize_t meter_slot_find_free_unlocked(void) {
+    for (ssize_t i = 0; i < meters_slots_count; i++) {
+        if (meters[i] == NULL) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+ssize_t meter_slot_find_free(void) {
+    Semaphore_wait(meters_semaphore);
+    ssize_t result = meter_slot_find_free_unlocked();
+    Semaphore_post(meters_semaphore);
+    return result;
+}
+
+// Return index of allocated meter record or -1 if failed to allocate new record
+// Must be called with meters_semaphore hold!
+ssize_t meter_record_allocate_unlocked(void) {
+    ssize_t free_slot = meter_slot_find_free_unlocked();
+    if (free_slot == -1) { // If we failed to find free (NULL-pointer) slot for new meter in meters[]
+        meters_slots_count++;
+        free_slot = meters_slots_count - 1; // Array indexing starts from 0 in C
+        struct meter_record **new_array = realloc(meters, meters_slots_count * sizeof(struct meter_record *));
+        if (new_array == NULL) {
+            meters_slots_count--;
+            Semaphore_post(meters_semaphore);
+            perror("ERROR: Unable to realloc meters array for adding a new meter");
+            return -1;
+        }
+        meters = new_array;
+    }
+    meters[free_slot] = calloc(1, sizeof(struct meter_record));
+    if (meters[free_slot] == NULL) {
+        perror("ERROR: Unable to allocate new meter record");
+        free_slot = -1;
+    }
+    return free_slot;
+}
+
+// Return index of allocated meter record or -1 if failed to allocate new record
+ssize_t meter_record_allocate(void) {
+    Semaphore_wait(meters_semaphore);
+    ssize_t result = meter_record_allocate_unlocked();
+    Semaphore_post(meters_semaphore);
+    return result;
+}
+
+// Destroy meter record in slot slot_id and free allocated resources
+// Returns true if record was destroyed, false if invalid slot_id was passed
+// Must be called with meters_semaphore hold!
+bool meter_record_destroy_unlocked(ssize_t slot_id) {
+    if (slot_id < 0 || slot_id >= meters_slots_count) {
+        fprintf(stderr, "%s: invalid slot id %zd passed - must be between 0..%ld\n", __func__, slot_id,
+                meters_slots_count - 1);
+        return false;
+    }
+    struct meter_record *record = meters[slot_id];
+    if (record == NULL) {
+        printf("%s: WARNING: Record in slot id %zd is NULL - nothing to do\n", __func__, slot_id);
+        return false;
+    }
+    free(record->host);
+    free(record->domain_socket_name);
+    free(record);
+    meters[slot_id] = NULL;
+    return true;
+}
+
+// Destroy meter record in slot slot_id and free allocated resources
+// Returns true if record was destroyed, false if invalid slot_id was passed
+bool meter_record_destroy(ssize_t slot_id) {
+    Semaphore_wait(meters_semaphore);
+    bool result = meter_record_destroy_unlocked(slot_id);
+    Semaphore_post(meters_semaphore);
+    return result;
+}
+
+// Updates meter record at given index with given parameters
+// Returns true on success, false if invalid slot id was passed
+// Must be called with meters_semaphore hold!
+bool
+meter_record_update_unlocked(ssize_t slot_id, struct context *context, Thread thread) {
+    if (slot_id >= meters_slots_count) {
+        fprintf(stderr, "%s: invalid slot id %zd passed - must be between 0..%ld\n", __func__, slot_id,
+                meters_slots_count - 1);
+        return false;
+    }
+    struct meter_record *meter_record = meters[slot_id];
+    if (meter_record == NULL) {
+        fprintf(stderr, "%s: invalid slot id %zd passed (NULL value)\n", __func__, slot_id);
+        return false;
+    }
+
+    meter_record->host = strdup(context->host);
+    meter_record->port = context->port;
+    if (context->domain_socket_name) {
+        meter_record->domain_socket_name = strdup(context->domain_socket_name);
+    } else {
+        meter_record->domain_socket_name = NULL;
+    }
+    meter_record->tcp_reporting_port = context->tcp_reporting_port;
+    meter_record->live_mode = context->LIVE_MODE;
+    meter_record->thread = thread;
+
+    printf("%s:%d Updated meter record in slot id %zd (domain socket %s/tcp port %d) in %s mode\n",
+           context->host, context->port, slot_id, context->domain_socket_name, context->tcp_reporting_port,
+           context->LIVE_MODE ? "live" : "once");
+
+    return true;
+}
+
+// Updates meter record at given index with given parameters
+// Returns true on success, false if invalid slot name was passed
+bool meter_record_update(ssize_t slot_number, struct context *context, Thread thread) {
+    Semaphore_wait(meters_semaphore);
+    meter_record_update_unlocked(slot_number, context, thread);
+    Semaphore_post(meters_semaphore);
+    return true;
+}
+
+static bool iec_104_meter_add_internal(const char *host, const uint16_t port, const char *domain_socket_name,
+                                       const uint16_t tcp_reporting_port, bool live_mode) {
     struct context *context = calloc(1, sizeof(struct context));
     if (context == NULL) {
         perror("ERROR: unable to allocate memory for context");
-        return EXIT_FAILURE;
+        return false;
     }
 
-    context->host = address;
+    context->host = host;
     context->port = port;
     context->domain_socket_name = domain_socket_name;
-    context->tcp_reporting_port = reporting_port;
+    context->tcp_reporting_port = tcp_reporting_port;
     context->LIVE_MODE = live_mode;
+
+    if (meter_record_find(context) >= 0) {
+        printf("%s:%d WARNING: Meter already exist (domain socket %s/tcp port %d) in %s mode - ignoring re-add attempt\n",
+               host, port, domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
+        free(context);
+        return false;
+    }
 
     Thread thread = Thread_create(&iec_104_fetch_thread, context, true);
     if (thread != NULL) {
+        Semaphore_wait(meters_semaphore);
+        ssize_t slot_id = meter_record_allocate_unlocked();
+        if (slot_id < 0) {
+            fprintf(stderr, "%s:%d ERROR: Unable to allocale meter record\n", host, port);
+            Semaphore_post(meters_semaphore);
+            return false;
+        }
+        if (!meter_record_update_unlocked(slot_id, context, thread)) {
+            fprintf(stderr, "%s:%d ERROR: Unable to update meter record in slot %zd\n", host, port, slot_id);
+            meter_record_destroy_unlocked(slot_id);
+            Semaphore_post(meters_semaphore);
+            return false;
+        }
+        Semaphore_post(meters_semaphore);
         Thread_start(thread);
     } else {
         perror("ERROR: Unable to create thread");
-        return EXIT_FAILURE;
+        return false;
     }
-    return EXIT_SUCCESS;
+    return true;
+}
+
+// Must be called on library/binary file load
+__attribute__((constructor))
+static void iec_104_init_internal(void) {
+    meters_semaphore = Semaphore_create(1);
 }
 
 #if defined STANDALONE
@@ -960,7 +1168,7 @@ int main(int argc, char **argv) {
             printf("%s:%d Starting new thread with domain socket \"%s\" in %s mode\n", host, port, domain_socket_name,
                    live_mode ? "live" : "once");
         }
-        iec_104_fetch_internal(host, port, domain_socket_name, (uint16_t) reporting_port, live_mode);
+        iec_104_meter_add_internal(host, port, domain_socket_name, (uint16_t) reporting_port, live_mode);
         argc -= 4;
         argv += 4;
     }
@@ -968,13 +1176,12 @@ int main(int argc, char **argv) {
 }
 
 #else
-
 static void iec_104_usage(struct lua_State *L) {
     luaL_error(L, "Usage: fetch(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number}, live_mode: bool)");
 }
 
 static int
-iec_104_fetch(struct lua_State *L) {
+iec_104_meter_add(struct lua_State *L) {
     if (lua_gettop(L) < 4) {
         iec_104_usage(L);
         return 0;
@@ -1009,7 +1216,13 @@ iec_104_fetch(struct lua_State *L) {
     }
     bool live_mode = lua_toboolean(L, 4);
     printf("%s:%d Starting meter's poll thread (domain socket %s/tcp port %d) in %s mode\n", host, port, domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
-    iec_104_fetch_internal(host, port, domain_socket_name, tcp_reporting_port, live_mode);
+    if (iec_104_meter_add_internal(host, port, domain_socket_name, tcp_reporting_port, live_mode)) {
+        printf("%s:%d Started meter's poll thread (domain socket %s/tcp port %d) in %s mode\n", host, port,
+               domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
+    } else {
+        fprintf(stderr, "%s:%d ERROR: Unable to start meter's poll thread (domain socket %s/tcp port %d) in %s mode\n",
+                host, port, domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
+    }
     return 0;
 }
 
@@ -1020,8 +1233,8 @@ luaopen_ckit_lib(lua_State *L)
 	/* result returned from require('ckit.lib') */
 	lua_newtable(L);
 	static const struct luaL_Reg meta [] = {
-		{"fetch", iec_104_fetch},
-		{NULL, NULL}
+            {"meter_add", iec_104_meter_add},
+            {NULL, NULL}
 	};
 	luaL_register(L, NULL, meta);
 	return 1;
