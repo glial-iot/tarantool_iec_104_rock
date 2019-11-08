@@ -181,9 +181,9 @@ void report_measurements(struct context *context) {
             reported = send_data_to_domain_socket(context, json_string);
         }
         if (!reported) {
-            unsigned int seed = currentTimeMillis() % 1000;
+            unsigned int seed = currentTimeMillis();
             printf("%s:%i WARNING: Data reporting failed (%d)\n", context->host, context->port, retries);
-            Thread_sleep(rand_r(&seed)); // Sleep random time in range [0..999] ms between retries to avoid deadlocks
+            Thread_sleep(rand_r(&seed) % 1000); // Sleep random time in range [0..999] ms between retries to avoid deadlocks
         }
     } while (!reported && retries != REPORTING_RETRIES_MAX);
     if (!reported) {
