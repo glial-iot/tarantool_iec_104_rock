@@ -95,6 +95,7 @@ static void context_dump(struct context *context) {
     printf("tcp_reporting_port=%d\n", context->tcp_reporting_port);
     printf("CONNECTION_CLOSING=%d\n", context->CONNECTION_CLOSING);
     printf("CONNECTION_CLOSED=%d\n", context->CONNECTION_CLOSED);
+    printf("LIVE_MODE=%d\n", context->LIVE_MODE);
     printf("master_object=%s\n",
            context->master_object == NULL ? "NULL" : json_object_get_string(context->master_object));
     printf("device_id=%s\n", context->device_id);
