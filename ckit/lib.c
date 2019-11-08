@@ -41,6 +41,7 @@
 #define PORT "port"
 #define MEASUREMENTS "measurements"
 #define LIVE_REPORTING "live_reporting"
+#define DISCONNECTED "disconnected"
 #define RECONNECT_TIMEOUT (10) // 10 seconds
 #define REPORTING_HOST "127.0.0.1"
 #define REPORTING_RETRIES_MAX 10
@@ -314,6 +315,7 @@ static struct json_object *master_object_create(struct context *context) {
         json_object_object_add(master_object, DEVICE_ID, json_object_new_string(context->device_id));
     }
     json_object_object_add(master_object, LIVE_REPORTING, json_object_new_boolean(context->LIVE_MODE));
+    json_object_object_add(master_object, DISCONNECTED, json_object_new_boolean(context->CONNECTION_CLOSED));
     printf("%s:%i master object %p created\n", context->host, context->port, master_object);
     if (CONTEXT_DEBUG) {
         context_dump(context);
@@ -887,6 +889,12 @@ static void *iec_104_fetch_thread(void *arg) {
             Thread_sleep(RECONNECT_TIMEOUT * 1000);
             printf("%s:%i Sleeped %d seconds, reconnecting\n", context->host, context->port, RECONNECT_TIMEOUT);
         }
+    }
+    if (context->LIVE_MODE) {
+        printf("%s:%i Connection in live mode was unexpectedly closed - reporting this\n", context->host,
+               context->port);
+        context->master_object = master_object_create(context);
+        report_measurements(context);
     }
     printf("%s:%d Thread finished\n", context->host, context->port);
     context_destroy(context);
