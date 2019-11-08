@@ -40,6 +40,7 @@
 #define DEVICE_ID "device_id"
 #define PORT "port"
 #define MEASUREMENTS "measurements"
+#define LIVE_REPORTING "live_reporting"
 #define RECONNECT_TIMEOUT (10) // 10 seconds
 #define REPORTING_HOST "127.0.0.1"
 #define REPORTING_RETRIES_MAX 10
@@ -312,6 +313,7 @@ static struct json_object *master_object_create(struct context *context) {
         printf("%s:%i master object %p - setting device id %s\n", context->host, context->port, master_object, context->device_id);
         json_object_object_add(master_object, DEVICE_ID, json_object_new_string(context->device_id));
     }
+    json_object_object_add(master_object, LIVE_REPORTING, json_object_new_boolean(context->LIVE_MODE));
     printf("%s:%i master object %p created\n", context->host, context->port, master_object);
     if (CONTEXT_DEBUG) {
         context_dump(context);
