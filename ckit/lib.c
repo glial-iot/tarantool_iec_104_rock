@@ -92,6 +92,7 @@ static void context_dump(struct context *context) {
     printf("host=%s\n", context->host);
     printf("port=%d\n", context->port);
     printf("domain_socket_name=%s\n", context->domain_socket_name);
+    printf("tcp_reporting_port=%d\n", context->tcp_reporting_port);
     printf("CONNECTION_CLOSING=%d\n", context->CONNECTION_CLOSING);
     printf("CONNECTION_CLOSED=%d\n", context->CONNECTION_CLOSED);
     printf("master_object=%s\n",
