@@ -860,7 +860,7 @@ static void *iec_104_fetch_thread(void *arg) {
             while (!context->CONNECTION_CLOSING) {
                 Thread_sleep(100);
                 time_current = time(NULL);
-                if (time_current - time_start > 15) {
+                if (time_current - time_start > 15 && !context->LIVE_MODE) {
                     printf("%s:%d WARNING: Timed out receiving data\n", context->host, context->port);
                     break;
                 }
