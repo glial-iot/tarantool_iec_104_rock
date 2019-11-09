@@ -43,6 +43,7 @@
 #define MEASUREMENTS "measurements"
 #define LIVE_REPORTING "live_reporting"
 #define DISCONNECTED "disconnected"
+#define TCP_REPORTING_PORT "tcp_reporting_port"
 #define RECONNECT_TIMEOUT (10) // 10 seconds
 #define REPORTING_HOST "127.0.0.1"
 #define REPORTING_RETRIES_MAX 10
@@ -338,6 +339,7 @@ static struct json_object *master_object_create(struct context *context) {
     }
     json_object_object_add(master_object, LIVE_REPORTING, json_object_new_boolean(context->LIVE_MODE));
     json_object_object_add(master_object, DISCONNECTED, json_object_new_boolean(context->CONNECTION_CLOSED));
+    json_object_object_add(master_object, TCP_REPORTING_PORT, json_object_new_int(context->tcp_reporting_port));
     printf("%s:%i master object %p created\n", context->host, context->port, master_object);
     if (CONTEXT_DEBUG) {
         context_dump(context);
