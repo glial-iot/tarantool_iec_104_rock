@@ -1,4 +1,5 @@
 local iec_104 = require('ckit.lib')
+local json = require('cjson')
 
 local socket = require "socket"
 local sock = socket.bind('127.0.0.1', 0)
@@ -11,6 +12,12 @@ while true do
     data = conn:receive("*a") -- receive all data from socket, until connection is closed
     if (data ~= nil) then
         print("Got data: " .. data)
+        local decoded = json.decode(data)
+        local disconnected = decoded.disconnected
+        if (disconnected ~= nil and disconnected) then
+            print("meter " .. decoded.address .. " disconnected - rearming")
+            iec_104.meter_add("meter1.example.com", 2404, port, true);
+        end
     else
         print("Got no data!")
     end
