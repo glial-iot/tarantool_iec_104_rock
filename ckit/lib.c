@@ -194,7 +194,15 @@ static bool send_data_to_tcp_socket(const struct context *context, const char *d
 
 void report_measurements(struct context *context) {
     printf("%s:%i Reporting data\n", context->host, context->port);
+    if (context->master_object == NULL) {
+        fprintf(stderr, "%s:%i ERROR: Unable to report data - master_object is NULL!\n", context->host, context->port);
+        return;
+    }
     const char *json_string = json_object_get_string(context->master_object);
+    if (context->master_object == NULL) {
+        fprintf(stderr, "%s:%i ERROR: Unable to report data - can't serialize master_object!\n", context->host, context->port);
+        return;
+    }
     printf("%s:%i Reporting data: %s\n", context->host, context->port, json_string);
     bool reported;
     int retries = 0;
