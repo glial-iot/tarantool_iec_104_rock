@@ -7,6 +7,7 @@ address, port = sock:getsockname()
 
 iec_104.meter_add("meter1.example.com", 2404, port, true)
 iec_104.meter_add("meter2.example.com", 2404, port, false)
+local retries = 0
 while true do
     conn = assert(sock:accept())
     data = conn:receive("*a") -- receive all data from socket, until connection is closed
@@ -20,5 +21,9 @@ while true do
         end
     else
         print("Got no data!")
+    end
+    retries = retries + 1
+    if (retries == 3) then
+        iec_104.meter_remove("meter1.example.com", 2404, port, true)
     end
 end

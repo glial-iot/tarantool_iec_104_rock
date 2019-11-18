@@ -61,12 +61,16 @@ struct context {
     bool CONNECTION_CLOSING;
     bool CONNECTION_CLOSED;
     bool INTERROGATION_FINISHED;
+    Semaphore stop_semaphore;
+    bool STOP_REQUESTED;
     struct json_object *master_object;
     char *device_id;
 };
 
 struct meter_record {
     Thread thread;
+    struct context *context; // Should be only accessed via stop_semaphore and STOP_REQUESTED flag
+    // Duplicate info from meter's thread context to make sure it's intact - it is critical for threads tracking
     char *host;
     u_int16_t port;
     char *domain_socket_name;
@@ -83,12 +87,14 @@ static void context_destroy(struct context *context) {
     free((char *) context->host);
     free((char *) context->domain_socket_name);
     free(context->device_id);
+    Semaphore_destroy(context->stop_semaphore);
     free(context);
 }
 
 static void context_dump(struct context *context) {
     fflush(stdout);
     puts("");
+    Semaphore_wait(context->stop_semaphore);
     printf("context=%p\n", context);
     printf("host=%s\n", context->host);
     printf("port=%d\n", context->port);
@@ -97,9 +103,11 @@ static void context_dump(struct context *context) {
     printf("CONNECTION_CLOSING=%d\n", context->CONNECTION_CLOSING);
     printf("CONNECTION_CLOSED=%d\n", context->CONNECTION_CLOSED);
     printf("LIVE_MODE=%d\n", context->LIVE_MODE);
+    printf("STOP_REQUESTED=%d\n", context->STOP_REQUESTED);
     printf("master_object=%s\n",
            context->master_object == NULL ? "NULL" : json_object_get_string(context->master_object));
     printf("device_id=%s\n", context->device_id);
+    Semaphore_post(context->stop_semaphore);
     puts("");
     fflush(stdout);
 }
@@ -868,6 +876,14 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
     return true;
 }
 
+bool iec_104_fetch_thread_get_stop_requested(struct context *context) {
+    bool result;
+    Semaphore_wait(context->stop_semaphore);
+    result = context->STOP_REQUESTED;
+    Semaphore_post(context->stop_semaphore);
+    return result;
+}
+
 ssize_t meter_record_find(struct context *context);
 bool meter_record_destroy(ssize_t slot_id);
 
@@ -888,7 +904,8 @@ void process_meter_connection(struct context *context, struct sCS104_Connection 
     long int time_start;
     long int time_current;
     time_start = time(NULL);
-    while (!context->CONNECTION_CLOSING && !context->CONNECTION_CLOSED) {
+    while (!context->CONNECTION_CLOSING && !context->CONNECTION_CLOSED &&
+           !iec_104_fetch_thread_get_stop_requested(context)) {
         Thread_sleep(100);
         time_current = time(NULL);
         if (time_current - time_start > 15 && !context->LIVE_MODE) {
@@ -921,7 +938,7 @@ static void *iec_104_fetch_thread(void *arg) {
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
 
-    while (true) {
+    while (!iec_104_fetch_thread_get_stop_requested(context)) {
         bool connected = CS104_Connection_connect(con);
         printf(connected ? "%s:%i Connected\n" : "%s:%i NOT conneted\n", context->host, context->port);
         if (connected) {
@@ -931,10 +948,15 @@ static void *iec_104_fetch_thread(void *arg) {
         } else {
             printf("%s:%i Sleeping %d seconds before reconnect\n", context->host, context->port, RECONNECT_TIMEOUT);
             Thread_sleep(RECONNECT_TIMEOUT * 1000);
-            printf("%s:%i Sleeped %d seconds, reconnecting\n", context->host, context->port, RECONNECT_TIMEOUT);
+            if (iec_104_fetch_thread_get_stop_requested(context)) {
+                printf("%s:%i Thread stop was requested during waiting for reconnect, stopping\n", context->host,
+                       context->port);
+            } else {
+                printf("%s:%i Sleeped %d seconds, reconnecting\n", context->host, context->port, RECONNECT_TIMEOUT);
+            }
         }
     }
-    if (context->LIVE_MODE) {
+    if (context->LIVE_MODE && !iec_104_fetch_thread_get_stop_requested(context)) {
         printf("%s:%i Connection in live mode was unexpectedly closed - reporting this\n", context->host,
                context->port);
         json_object_put(context->master_object);
@@ -1096,6 +1118,7 @@ meter_record_update_unlocked(ssize_t slot_id, struct context *context, Thread th
     meter_record->tcp_reporting_port = context->tcp_reporting_port;
     meter_record->live_mode = context->LIVE_MODE;
     meter_record->thread = thread;
+    meter_record->context = context;
 
     printf("%s:%d Updated meter record in slot id %zd (domain socket %s/tcp port %d) in %s mode\n",
            context->host, context->port, slot_id, context->domain_socket_name, context->tcp_reporting_port,
@@ -1126,6 +1149,7 @@ static bool iec_104_meter_add_internal(const char *host, const uint16_t port, co
     context->domain_socket_name = domain_socket_name;
     context->tcp_reporting_port = tcp_reporting_port;
     context->LIVE_MODE = live_mode;
+    context->stop_semaphore = Semaphore_create(1);
 
     if (meter_record_find(context) >= 0) {
         printf("%s:%d WARNING: Meter already exist (domain socket %s/tcp port %d) in %s mode - ignoring re-add attempt\n",
@@ -1155,6 +1179,48 @@ static bool iec_104_meter_add_internal(const char *host, const uint16_t port, co
         perror("ERROR: Unable to create thread");
         return false;
     }
+    return true;
+}
+
+static bool iec_104_meter_remove_internal(const char *host, const uint16_t port, const char *domain_socket_name,
+                                          const uint16_t tcp_reporting_port, bool live_mode) {
+    struct context *context = calloc(1, sizeof(struct context));
+    if (context == NULL) {
+        perror("ERROR: unable to allocate memory for context");
+        return false;
+    }
+
+    // Create temporary context to pass it to meter_record_find_unlocked()
+    context->host = host;
+    context->port = port;
+    context->domain_socket_name = domain_socket_name;
+    context->tcp_reporting_port = tcp_reporting_port;
+    context->LIVE_MODE = live_mode;
+
+    Semaphore_wait(meters_semaphore);
+
+    ssize_t slot_id = meter_record_find_unlocked(context);
+    if (slot_id < 0) {
+        Semaphore_post(meters_semaphore);
+        printf("%s:%d WARNING: Meter not exist (domain socket %s/tcp port %d) in %s mode - ignoring remove attempt\n",
+               host, port, domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
+        free(context);
+        return false;
+    }
+    free(context);
+
+    struct meter_record *meter_object = meters[slot_id];
+    printf("%s:%d Setting STOP_REQUESTED for fetch thread\n", host, port);
+    Semaphore_wait(meter_object->context->stop_semaphore);
+    meter_object->context->STOP_REQUESTED = true;
+    Semaphore_post(meter_object->context->stop_semaphore);
+    printf("%s:%d Destroying meter record\n", host, port);
+    if (!meter_record_destroy_unlocked(slot_id)) {
+        Semaphore_post(meters_semaphore);
+        fprintf(stderr, "%s:%d ERROR: Unable to destroy meter record in slot %zd\n", host, port, slot_id);
+        return false;
+    }
+    Semaphore_post(meters_semaphore);
     return true;
 }
 
@@ -1203,6 +1269,10 @@ int main(int argc, char **argv) {
         argc -= 4;
         argv += 4;
     }
+    Thread_sleep(16 * 1000); // Run background threads for 16 seconds
+    iec_104_meter_remove_internal("46.250.54.56", 2404, NULL, 37323, true);
+    Thread_sleep(16 * 1000); // Run background threads for 16 seconds
+    iec_104_meter_remove_internal("89.113.3.28", 2404, NULL, 37323, true);
     Thread_sleep(128 * 1000); // Run background threads for 128 seconds
 }
 
@@ -1258,6 +1328,59 @@ iec_104_meter_add(struct lua_State *L) {
     return 0;
 }
 
+static void iec_104_meter_remove_usage(struct lua_State *L) {
+    luaL_error(L,
+               "Usage: meter_remove(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number}, live_mode: bool)\n"
+               "All parameters must exactly match meter_add() parameters was used to add this meter");
+}
+
+static int
+iec_104_meter_remove(struct lua_State *L) {
+    if (lua_gettop(L) < 4) {
+        iec_104_meter_remove_usage(L);
+        return 0;
+    }
+
+    printf("%s: Trying to get meter's host from LUA\n", __func__);
+    const char *lua_host = lua_tostring(L, 1);
+    if (lua_host == NULL) {
+        iec_104_meter_remove_usage(L);
+        return 0;
+    }
+    const char *host = strdup(lua_host);
+    printf("%s: Got meter's host \"%s\" from LUA\n", __func__, host);
+    printf("%s: Trying to get meter's TCP port from LUA\n", __func__);
+    const uint16_t port = lua_tointeger(L, 2);
+    printf("%s: Got meter's TCP port %d\n", __func__, port);
+    const char *domain_socket_name = NULL;
+    uint16_t tcp_reporting_port = 0;
+    if (lua_isnumber(L, 3)) {
+        printf("%s:%d Trying to get reporting TCP port from LUA\n", host, port);
+        tcp_reporting_port = lua_tointeger(L, 3);
+        printf("%s:%d Got reporting TCP port %d\n", host, port, tcp_reporting_port);
+    } else {
+        printf("%s:%d Trying to get reporting domain socket name from LUA\n", host, port);
+        const char *lua_name = lua_tostring(L, 3);
+        if (lua_name == NULL) {
+            iec_104_meter_remove_usage(L);
+            return 0;
+        }
+        domain_socket_name = strdup(lua_name);
+        printf("%s:%d Got reporting domain socket name \"%s\"\n", host, port, domain_socket_name);
+    }
+    bool live_mode = lua_toboolean(L, 4);
+    printf("%s:%d Stopping meter's poll thread (domain socket %s/tcp port %d) in %s mode\n", host, port,
+           domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
+    if (iec_104_meter_remove_internal(host, port, domain_socket_name, tcp_reporting_port, live_mode)) {
+        printf("%s:%d Stopped meter's poll thread (domain socket %s/tcp port %d) in %s mode\n", host, port,
+               domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
+    } else {
+        fprintf(stderr, "%s:%d ERROR: Unable to stop meter's poll thread (domain socket %s/tcp port %d) in %s mode\n",
+                host, port, domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
+    }
+    return 0;
+}
+
 /* exported function */
 LUA_API int
 luaopen_ckit_lib(lua_State *L)
@@ -1265,7 +1388,8 @@ luaopen_ckit_lib(lua_State *L)
 	/* result returned from require('ckit.lib') */
 	lua_newtable(L);
 	static const struct luaL_Reg meta [] = {
-            {"meter_add", iec_104_meter_add},
+            {"meter_add",    iec_104_meter_add},
+            {"meter_remove", iec_104_meter_remove},
             {NULL, NULL}
 	};
 	luaL_register(L, NULL, meta);
