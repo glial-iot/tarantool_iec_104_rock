@@ -1207,21 +1207,22 @@ int main(int argc, char **argv) {
 }
 
 #else
-static void iec_104_usage(struct lua_State *L) {
-    luaL_error(L, "Usage: fetch(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number}, live_mode: bool)");
+
+static void iec_104_meter_add_usage(struct lua_State *L) {
+    luaL_error(L, "Usage: meter_add(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number}, live_mode: bool)");
 }
 
 static int
 iec_104_meter_add(struct lua_State *L) {
     if (lua_gettop(L) < 4) {
-        iec_104_usage(L);
+        iec_104_meter_add_usage(L);
         return 0;
     }
 
     printf("%s: Trying to get meter's host from LUA\n", __func__);
     const char *lua_host = lua_tostring(L, 1);
     if (lua_host == NULL) {
-        iec_104_usage(L);
+        iec_104_meter_add_usage(L);
         return 0;
     }
     const char *host = strdup(lua_host);
@@ -1239,7 +1240,7 @@ iec_104_meter_add(struct lua_State *L) {
         printf("%s:%d Trying to get reporting domain socket name from LUA\n", host, port);
         const char *lua_name = lua_tostring(L, 3);
         if (lua_name == NULL) {
-            iec_104_usage(L);
+            iec_104_meter_add_usage(L);
             return 0;
         }
         domain_socket_name = strdup(lua_name);
