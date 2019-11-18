@@ -915,9 +915,8 @@ static void *iec_104_fetch_thread(void *arg) {
     /* uncomment to log messages */
     //CS104_Connection_setRawMessageHandler(con, rawMessageHandler, NULL);
 
-    bool connected = false;
     while (true) {
-        connected = CS104_Connection_connect(con);
+        bool connected = CS104_Connection_connect(con);
         printf(connected ? "%s:%i Connected\n" : "%s:%i NOT conneted\n", context->host, context->port);
         if (connected) {
             process_meter_connection(context, con);
