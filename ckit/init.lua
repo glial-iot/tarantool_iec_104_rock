@@ -36,5 +36,6 @@ end
 -- result returned from require('ckit')
 return {
     meter_add = clib.meter_add; -- C function
+    meter_remove = clib.meter_remove; -- C function
 }
 -- vim: ts=4 sts=4 sw=4 et
