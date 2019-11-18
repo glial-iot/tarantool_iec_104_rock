@@ -1249,6 +1249,18 @@ static bool iec_104_meter_remove_internal(const char *host, const uint16_t port,
     return result;
 }
 
+static bool iec_104_meter_remove_all_internal(void) {
+    Semaphore_wait(meters_semaphore);
+    for (ssize_t slot_id = 0; slot_id < meters_slots_count; slot_id++) {
+        if (meters[slot_id]) {
+            printf("%s:%d Stopping fetch thread\n", meters[slot_id]->host, meters[slot_id]->port);
+            iec_104_fetch_thread_stop_by_slot_id_unlocked(slot_id);
+        }
+    }
+    Semaphore_post(meters_semaphore);
+    return true;
+}
+
 // Must be called on library/binary file load
 __attribute__((constructor))
 static void iec_104_init_internal(void) {
@@ -1299,6 +1311,7 @@ int main(int argc, char **argv) {
     Thread_sleep(16 * 1000); // Run background threads for 16 seconds
     iec_104_meter_remove_internal("89.113.3.28", 2404, NULL, 37323, true);
     Thread_sleep(128 * 1000); // Run background threads for 128 seconds
+    iec_104_meter_remove_all_internal();
 }
 
 #else
@@ -1406,6 +1419,22 @@ iec_104_meter_remove(struct lua_State *L) {
     return 0;
 }
 
+static void iec_104_meter_remove_all_usage(struct lua_State *L) {
+    luaL_error(L,"Usage: iec_104_meter_remove_all()\n");
+}
+
+static int
+iec_104_meter_remove_all(struct lua_State *L) {
+    if (lua_gettop(L) > 0) {
+        iec_104_meter_remove_all_usage(L);
+        return 0;
+    }
+
+    printf("%s: Stopping all meters fetch threads\n", __func__);
+    iec_104_meter_remove_all_internal();
+    return 0;
+}
+
 /* exported function */
 LUA_API int
 luaopen_ckit_lib(lua_State *L)
@@ -1415,6 +1444,7 @@ luaopen_ckit_lib(lua_State *L)
 	static const struct luaL_Reg meta [] = {
             {"meter_add",    iec_104_meter_add},
             {"meter_remove", iec_104_meter_remove},
+            {"meter_remove_all", iec_104_meter_remove_all},
             {NULL, NULL}
 	};
 	luaL_register(L, NULL, meta);

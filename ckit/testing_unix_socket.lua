@@ -24,4 +24,7 @@ while true do
     if (retries == 3) then
         iec_104.meter_remove("meter1.example.com", 2404, port, true)
     end
+    if (retries == 10) then
+        iec_104.meter_remove_all()
+    end
 end
