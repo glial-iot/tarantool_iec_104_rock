@@ -366,7 +366,7 @@ static void put_measurement(struct context *context, struct json_object *measure
     json_object_object_get_ex(context->master_object, MEASUREMENTS, &measurements_array);
 
     int replaced = 0;
-    for (int i = 0; i < json_object_array_length(measurements_array); i++) {
+    for (size_t i = 0; i < json_object_array_length(measurements_array); i++) {
         struct json_object *cur_measurement = json_object_array_get_idx(measurements_array, i);
         struct json_object *cur_ioa;
         json_object_object_get_ex(cur_measurement, OBJECT_ADDRESS, &cur_ioa);
