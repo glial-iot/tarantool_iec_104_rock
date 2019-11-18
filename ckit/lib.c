@@ -655,6 +655,10 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
         //exit(EXIT_SUCCESS);
     }
 
+    if (!context->master_object) {
+        context->master_object = master_object_create(context);
+    }
+
     switch (type) {
         case M_SP_NA_1: // "Single-point information"
             jsonify_M_SP_NA_1(asdu, context);
