@@ -896,8 +896,10 @@ void process_meter_connection(struct context *context, struct sCS104_Connection 
             break;
         }
     }
-    printf("%s:%d Sending StopDT\n", context->host, context->port);
-    CS104_Connection_sendStopDT(con);
+    if (!context->CONNECTION_CLOSED) {
+        printf("%s:%d Sending StopDT\n", context->host, context->port);
+        CS104_Connection_sendStopDT(con);
+    }
     waif_for_connection_close(context);
     printf("%s:%d Destroying the connection\n", context->host, context->port);
     CS104_Connection_destroy(con);
