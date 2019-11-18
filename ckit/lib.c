@@ -1182,6 +1182,41 @@ static bool iec_104_meter_add_internal(const char *host, const uint16_t port, co
     return true;
 }
 
+// Updates meter record at given index with given parameters
+// Returns true on success, false if invalid slot id was passed
+// Must be called with meters_semaphore hold!
+bool iec_104_fetch_thread_stop_by_slot_id_unlocked(ssize_t slot_id) {
+    if (slot_id < 0 || slot_id >= meters_slots_count) {
+        fprintf(stderr, "%s: invalid slot id %zd passed - must be between 0..%ld\n", __func__, slot_id,
+                meters_slots_count - 1);
+        return false;
+    }
+    struct meter_record *meter_object = meters[slot_id];
+    if (!meter_object) {
+        return false;
+    }
+    const char *host = meter_object->host;
+    int port = meter_object->port;
+    printf("%s:%d Setting STOP_REQUESTED for fetch thread\n", host, port);
+    Semaphore_wait(meter_object->context->stop_semaphore);
+    meter_object->context->STOP_REQUESTED = true;
+    Semaphore_post(meter_object->context->stop_semaphore);
+    printf("%s:%d Destroying meter record\n", host, port);
+    if (!meter_record_destroy_unlocked(slot_id)) {
+        fprintf(stderr, "%s:%d ERROR: Unable to destroy meter record in slot %zd\n", host, port, slot_id);
+        return false;
+    }
+    return true;
+}
+
+// Updates meter record at given index with given parameters
+// Returns true on success, false if invalid slot id was passed
+bool iec_104_fetch_thread_stop_by_slot_id(ssize_t slot_id) {
+    Semaphore_wait(meters_semaphore);
+    iec_104_fetch_thread_stop_by_slot_id_unlocked(slot_id);
+    Semaphore_post(meters_semaphore);
+}
+
 static bool iec_104_meter_remove_internal(const char *host, const uint16_t port, const char *domain_socket_name,
                                           const uint16_t tcp_reporting_port, bool live_mode) {
     struct context *context = calloc(1, sizeof(struct context));
@@ -1209,19 +1244,9 @@ static bool iec_104_meter_remove_internal(const char *host, const uint16_t port,
     }
     free(context);
 
-    struct meter_record *meter_object = meters[slot_id];
-    printf("%s:%d Setting STOP_REQUESTED for fetch thread\n", host, port);
-    Semaphore_wait(meter_object->context->stop_semaphore);
-    meter_object->context->STOP_REQUESTED = true;
-    Semaphore_post(meter_object->context->stop_semaphore);
-    printf("%s:%d Destroying meter record\n", host, port);
-    if (!meter_record_destroy_unlocked(slot_id)) {
-        Semaphore_post(meters_semaphore);
-        fprintf(stderr, "%s:%d ERROR: Unable to destroy meter record in slot %zd\n", host, port, slot_id);
-        return false;
-    }
+    bool result = iec_104_fetch_thread_stop_by_slot_id_unlocked(slot_id);
     Semaphore_post(meters_semaphore);
-    return true;
+    return result;
 }
 
 // Must be called on library/binary file load
