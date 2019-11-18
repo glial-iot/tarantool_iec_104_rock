@@ -1181,7 +1181,7 @@ int main(int argc, char **argv) {
     while (argc >= 5) {
         const char *host = strdup(argv[1]);
         const uint16_t port = (uint16_t) strtol(argv[2], NULL, 10);
-        const char *domain_socket_name = strdup(argv[3]);
+        const char *domain_socket_name = NULL;
         char *endptr;
         long int reporting_port = strtol(argv[3], &endptr, 10);
         bool live_mode = !strcmp(argv[4], "live");
