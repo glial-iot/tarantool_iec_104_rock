@@ -25,7 +25,7 @@
 #include <errno.h>
 #include "ioa_descriptions.h"
 
-#define CONTEXT_DEBUG true
+#define CONTEXT_DEBUG false
 
 #define OBJECT_ADDRESS "objectAddress"
 #define OBJECT_TYPE "objectType"
