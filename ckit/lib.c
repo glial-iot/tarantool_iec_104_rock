@@ -880,6 +880,26 @@ void waif_for_connection_close(const struct context *context) {
     }
 }
 
+void process_meter_connection(struct context *context, struct sCS104_Connection *con) {
+    long int time_start;
+    long int time_current;
+    time_start = time(NULL);
+    while (!context->CONNECTION_CLOSING && !context->CONNECTION_CLOSED) {
+        Thread_sleep(100);
+        time_current = time(NULL);
+        if (time_current - time_start > 15 && !context->LIVE_MODE) {
+            printf("%s:%d WARNING: Timed out receiving data\n", context->host, context->port);
+            break;
+        }
+    }
+    printf("%s:%d Sending StopDT\n", context->host, context->port);
+    CS104_Connection_sendStopDT(con);
+    waif_for_connection_close(context);
+    printf("%s:%d Destroying the connection\n", context->host, context->port);
+    CS104_Connection_destroy(con);
+    printf("%s:%d Destroyed the connection\n", context->host, context->port);
+}
+
 static void *iec_104_fetch_thread(void *arg) {
     struct context *context = arg;
     printf("%s:%i Started new thread\n", context->host, context->port);
@@ -900,26 +920,8 @@ static void *iec_104_fetch_thread(void *arg) {
         connected = CS104_Connection_connect(con);
         printf(connected ? "%s:%i Connected\n" : "%s:%i NOT conneted\n", context->host, context->port);
         if (connected) {
-            long int time_start;
-            long int time_current;
-            time_start = time(NULL);
-            while (!context->CONNECTION_CLOSING && !context->CONNECTION_CLOSED) {
-                Thread_sleep(100);
-                time_current = time(NULL);
-                if (time_current - time_start > 15 && !context->LIVE_MODE) {
-                    printf("%s:%d WARNING: Timed out receiving data\n", context->host, context->port);
-                    break;
-                }
-            }
-            printf("%s:%d Sending StopDT\n", context->host, context->port);
-            CS104_Connection_sendStopDT(con);
-            waif_for_connection_close(context);
-            printf("%s:%d Destroying the connection\n", context->host, context->port);
-            CS104_Connection_destroy(con);
-            printf("%s:%d Destroyed the connection\n", context->host, context->port);
-        }
-
-        if (connected) {
+            process_meter_connection(context, con);
+            printf("%s:%i Meter connection processing finished\n", context->host, context->port);
             break;
         } else {
             printf("%s:%i Sleeping %d seconds before reconnect\n", context->host, context->port, RECONNECT_TIMEOUT);
