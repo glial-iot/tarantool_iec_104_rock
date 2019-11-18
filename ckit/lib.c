@@ -867,6 +867,19 @@ asduReceivedHandler(void *parameter, int address, CS101_ASDU asdu) {
 ssize_t meter_record_find(struct context *context);
 bool meter_record_destroy(ssize_t slot_id);
 
+void waif_for_connection_close(const struct context *context) {
+    long time_start = time(NULL);
+    long time_current;
+    while (!context->CONNECTION_CLOSED) {
+        Thread_sleep(100);
+        time_current = time(NULL);
+        if (time_current - time_start > 15) {
+            printf("%s:%d Timed out closing the connection\n", context->host, context->port);
+            break;
+        }
+    }
+}
+
 static void *iec_104_fetch_thread(void *arg) {
     struct context *context = arg;
     printf("%s:%i Started new thread\n", context->host, context->port);
@@ -900,14 +913,7 @@ static void *iec_104_fetch_thread(void *arg) {
             }
             printf("%s:%d Sending StopDT\n", context->host, context->port);
             CS104_Connection_sendStopDT(con);
-            while (!context->CONNECTION_CLOSED) {
-                Thread_sleep(100);
-                time_current = time(NULL);
-                if (time_current - time_start > 15) {
-                    printf("%s:%d Timed out closing the connection\n", context->host, context->port);
-                    break;
-                }
-            }
+            waif_for_connection_close(context);
             printf("%s:%d Destroying the connection\n", context->host, context->port);
             CS104_Connection_destroy(con);
             printf("%s:%d Destroyed the connection\n", context->host, context->port);
