@@ -200,6 +200,7 @@ static bool send_data_to_tcp_socket(const struct context *context, const char *d
     return true;
 }
 
+bool iec_104_fetch_thread_get_stop_requested(struct context *context);
 void report_measurements(struct context *context) {
     printf("%s:%i Reporting data\n", context->host, context->port);
     if (context->master_object == NULL) {
@@ -222,7 +223,7 @@ void report_measurements(struct context *context) {
             printf("%s:%i WARNING: Data reporting failed (%d)\n", context->host, context->port, retries);
             Thread_sleep(rand_r(&seed) % 1000); // Sleep random time in range [0..999] ms between retries to avoid deadlocks
         }
-    } while (!reported && retries != REPORTING_RETRIES_MAX);
+    } while (!reported && retries != REPORTING_RETRIES_MAX && !iec_104_fetch_thread_get_stop_requested(context));
     if (!reported) {
         printf("%s:%i ERROR: Data reporting failed after %d retries - bailing\n", context->host, context->port,
                retries);
