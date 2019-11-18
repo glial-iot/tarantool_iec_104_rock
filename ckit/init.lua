@@ -38,5 +38,6 @@ return {
     meter_add = clib.meter_add; -- C function
     meter_remove = clib.meter_remove; -- C function
     meter_remove_all = clib.meter_remove_all; -- C function
+    measurement_get = clib.measurement_get; -- C function
 }
 -- vim: ts=4 sts=4 sw=4 et

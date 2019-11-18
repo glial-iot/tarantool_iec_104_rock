@@ -82,6 +82,14 @@ struct meter_record **meters = NULL;
 ssize_t meters_slots_count = 0;
 Semaphore meters_semaphore = NULL;
 
+struct measurement {
+    char *data;
+    struct measurement *next;
+};
+struct measurement *measurements_pool = NULL;
+struct measurement *last_reported_measurement = NULL;
+ssize_t measurements_count = 0;
+Semaphore measurements_semaphore = NULL;
 
 static void context_destroy(struct context *context) {
     free((char *) context->host);
@@ -200,6 +208,44 @@ static bool send_data_to_tcp_socket(const struct context *context, const char *d
     return true;
 }
 
+static bool send_data_to_measurements_pool(const char *data) {
+    Semaphore_wait(measurements_semaphore);
+    struct measurement *new_measurement = calloc(1, sizeof(struct measurement));
+    if (!new_measurement) {
+        Semaphore_post(measurements_semaphore);
+        perror("ERROR: Unable to allocate measurement record");
+        return false;
+    }
+    if (last_reported_measurement) {
+        last_reported_measurement->next = new_measurement;
+    }
+    new_measurement->data = strdup(data);
+    last_reported_measurement = new_measurement;
+    if(!measurements_pool) {
+        measurements_pool = last_reported_measurement;
+    }
+    measurements_count++;
+    Semaphore_post(measurements_semaphore);
+    return true;
+}
+
+static const char *receive_data_from_measurements_pool(void) {
+    Semaphore_wait(measurements_semaphore);
+    if (!measurements_count) {
+        Semaphore_post(measurements_semaphore);
+        return NULL;
+    }
+    const char *data = measurements_pool->data;
+    struct measurement *old_head = measurements_pool;
+    measurements_pool = measurements_pool->next;
+    free(old_head);
+    if (--measurements_count == 0) {
+        last_reported_measurement = NULL;
+    }
+    Semaphore_post(measurements_semaphore);
+    return data;
+}
+
 bool iec_104_fetch_thread_get_stop_requested(struct context *context);
 void report_measurements(struct context *context) {
     printf("%s:%i Reporting data\n", context->host, context->port);
@@ -215,8 +261,10 @@ void report_measurements(struct context *context) {
         retries++;
         if (context->tcp_reporting_port != 0) {
             reported = send_data_to_tcp_socket(context, json_string);
-        } else {
+        } else if (context->domain_socket_name) {
             reported = send_data_to_domain_socket(context, json_string);
+        } else {
+            reported = send_data_to_measurements_pool(json_string);
         }
         if (!reported) {
             unsigned int seed = currentTimeMillis();
@@ -1266,6 +1314,7 @@ static bool iec_104_meter_remove_all_internal(void) {
 __attribute__((constructor))
 static void iec_104_init_internal(void) {
     meters_semaphore = Semaphore_create(1);
+    measurements_semaphore = Semaphore_create(1);
 }
 
 #if defined STANDALONE
@@ -1318,7 +1367,8 @@ int main(int argc, char **argv) {
 #else
 
 static void iec_104_meter_add_usage(struct lua_State *L) {
-    luaL_error(L, "Usage: meter_add(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number}, live_mode: bool)");
+    luaL_error(L, "Usage: meter_add(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number|nil}, live_mode: bool)\n"
+                  "If nil passed as third parameter - it's necessary to poll library periodically using measurement_get()\n");
 }
 
 static int
@@ -1345,15 +1395,18 @@ iec_104_meter_add(struct lua_State *L) {
         printf("%s:%d Trying to get reporting TCP port from LUA\n", host, port);
         tcp_reporting_port = lua_tointeger(L, 3);
         printf("%s:%d Got reporting TCP port %d\n", host, port, tcp_reporting_port);
-    } else {
+    } else if (lua_isstring(L, 3)) {
         printf("%s:%d Trying to get reporting domain socket name from LUA\n", host, port);
         const char *lua_name = lua_tostring(L, 3);
-        if (lua_name == NULL) {
+        if (!strlen(lua_name)) {
             iec_104_meter_add_usage(L);
             return 0;
         }
         domain_socket_name = strdup(lua_name);
         printf("%s:%d Got reporting domain socket name \"%s\"\n", host, port, domain_socket_name);
+    } else if (!lua_isnil(L,3)) {
+        iec_104_meter_add_usage(L);
+        return 0;
     }
     bool live_mode = lua_toboolean(L, 4);
     printf("%s:%d Starting meter's poll thread (domain socket %s/tcp port %d) in %s mode\n", host, port, domain_socket_name, tcp_reporting_port, live_mode ? "live" : "once");
@@ -1369,8 +1422,8 @@ iec_104_meter_add(struct lua_State *L) {
 
 static void iec_104_meter_remove_usage(struct lua_State *L) {
     luaL_error(L,
-               "Usage: meter_remove(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number}, live_mode: bool)\n"
-               "All parameters must exactly match meter_add() parameters was used to add this meter");
+               "Usage: meter_remove(host: string, port: number, {domain_socket_name: string | tcp_reporting_port: number | nil}, live_mode: bool)\n"
+               "All parameters must exactly match meter_add() parameters was used to add this meter\n");
 }
 
 static int
@@ -1397,15 +1450,18 @@ iec_104_meter_remove(struct lua_State *L) {
         printf("%s:%d Trying to get reporting TCP port from LUA\n", host, port);
         tcp_reporting_port = lua_tointeger(L, 3);
         printf("%s:%d Got reporting TCP port %d\n", host, port, tcp_reporting_port);
-    } else {
+    } else if (lua_isstring(L, 3)) {
         printf("%s:%d Trying to get reporting domain socket name from LUA\n", host, port);
         const char *lua_name = lua_tostring(L, 3);
-        if (lua_name == NULL) {
+        if (!strlen(lua_name)) {
             iec_104_meter_remove_usage(L);
             return 0;
         }
         domain_socket_name = strdup(lua_name);
         printf("%s:%d Got reporting domain socket name \"%s\"\n", host, port, domain_socket_name);
+    } else if (!lua_isnil(L, 3)) {
+        iec_104_meter_remove_usage(L);
+        return 0;
     }
     bool live_mode = lua_toboolean(L, 4);
     printf("%s:%d Stopping meter's poll thread (domain socket %s/tcp port %d) in %s mode\n", host, port,
@@ -1436,6 +1492,26 @@ iec_104_meter_remove_all(struct lua_State *L) {
     return 0;
 }
 
+static void iec_104_measurement_get_usage(struct lua_State *L) {
+    luaL_error(L,"Usage: iec_104_measurement_get()\n");
+}
+
+static int
+iec_104_measurement_get(struct lua_State *L) {
+    if (lua_gettop(L) > 0) {
+        iec_104_measurement_get_usage(L);
+        return 0;
+    }
+    const char *measurement = receive_data_from_measurements_pool();
+    if (measurement) {
+        lua_pushstring(L, measurement);
+        free((char *)measurement);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
 /* exported function */
 LUA_API int
 luaopen_ckit_lib(lua_State *L)
@@ -1443,9 +1519,10 @@ luaopen_ckit_lib(lua_State *L)
 	/* result returned from require('ckit.lib') */
 	lua_newtable(L);
 	static const struct luaL_Reg meta [] = {
-            {"meter_add",    iec_104_meter_add},
-            {"meter_remove", iec_104_meter_remove},
+            {"meter_add",        iec_104_meter_add},
+            {"meter_remove",     iec_104_meter_remove},
             {"meter_remove_all", iec_104_meter_remove_all},
+            {"measurement_get",  iec_104_measurement_get},
             {NULL, NULL}
 	};
 	luaL_register(L, NULL, meta);
